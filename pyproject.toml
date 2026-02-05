@@ -1,0 +1,123 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "kb-engine"
+version = "0.1.0"
+description = "A hybrid RAG system for knowledge base management"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [
+    { name = "Babel", email = "dev@babel.es" },
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+    "asyncpg>=0.29.0",
+    "sqlalchemy[asyncio]>=2.0",
+    "alembic>=1.13.0",
+    "qdrant-client>=1.7.0",
+    "neo4j>=5.16.0",
+    "llama-index>=0.10.0",
+    "tiktoken>=0.5.0",
+    "openai>=1.10.0",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "python-frontmatter>=1.0.0",
+    "httpx>=0.26.0",
+    "structlog>=24.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.2.0",
+    "mypy>=1.8.0",
+    "pre-commit>=3.6.0",
+    "factory-boy>=3.3.0",
+    "testcontainers>=3.7.0",
+    "httpx>=0.26.0",
+]
+
+[project.scripts]
+kb-engine = "kb_engine.api.main:run"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/kb_engine"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-v --tb=short"
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests",
+    "api: API tests",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+    "ARG",    # flake8-unused-arguments
+    "SIM",    # flake8-simplify
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "B008",   # do not perform function calls in argument defaults
+    "B904",   # raise without from inside except
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["kb_engine"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = [
+    "neo4j.*",
+    "qdrant_client.*",
+    "llama_index.*",
+    "frontmatter.*",
+]
+ignore_missing_imports = true
+
+[tool.coverage.run]
+source = ["src/kb_engine"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]
