@@ -1,15 +1,15 @@
-"""Entity extraction for Kuzu graph storage."""
+"""Entity extraction for FalkorDB graph storage."""
 
 import structlog
 
-from kb_engine.smart.stores.kuzu_graph import KuzuGraphStore
+from kb_engine.smart.stores.falkordb_graph import FalkorDBGraphStore
 from kb_engine.smart.types import ExtractedEntityInfo, ParsedDocument
 
 logger = structlog.get_logger(__name__)
 
 
 class EntityGraphExtractor:
-    """Extracts and stores entity graph data in Kuzu.
+    """Extracts and stores entity graph data in FalkorDB.
 
     Extracts:
     - Main entity as Entity node
@@ -19,11 +19,11 @@ class EntityGraphExtractor:
     - Events as Event nodes (linked via PRODUCES/CONSUMES)
     """
 
-    def __init__(self, graph_store: KuzuGraphStore) -> None:
+    def __init__(self, graph_store: FalkorDBGraphStore) -> None:
         """Initialize extractor with graph store.
 
         Args:
-            graph_store: Kuzu graph store instance.
+            graph_store: FalkorDB graph store instance.
         """
         self.graph_store = graph_store
 

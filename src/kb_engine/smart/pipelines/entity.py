@@ -5,11 +5,11 @@ from pathlib import Path
 
 import structlog
 
-from kb_engine.smart.chunking import HierarchicalChunker, MockSummaryService, LLMSummaryService
+from kb_engine.smart.chunking import HierarchicalChunker, LLMSummaryService, MockSummaryService
 from kb_engine.smart.extraction import EntityGraphExtractor
 from kb_engine.smart.parsers import DocumentKindDetector, EntityParser
 from kb_engine.smart.schemas import ENTITY_SCHEMA
-from kb_engine.smart.stores import KuzuGraphStore
+from kb_engine.smart.stores import FalkorDBGraphStore
 from kb_engine.smart.types import IngestionResult, KDDDocumentKind
 
 logger = structlog.get_logger(__name__)
@@ -22,14 +22,14 @@ class EntityIngestionPipeline:
     1. Detects document type (must be entity)
     2. Parses using EntityParser
     3. Generates hierarchical chunks with summaries
-    4. Extracts entities and stores in Kuzu graph
+    4. Extracts entities and stores in FalkorDB graph
     5. Returns ingestion result with statistics
 
     Example:
         ```python
         from kb_engine.smart.pipelines import EntityIngestionPipeline
 
-        pipeline = EntityIngestionPipeline(graph_path="./kb-graph")
+        pipeline = EntityIngestionPipeline(graph_path="./kb-graph.db")
 
         with open("domain/entities/User.md") as f:
             content = f.read()
@@ -42,7 +42,7 @@ class EntityIngestionPipeline:
 
     def __init__(
         self,
-        graph_path: str | Path = ".kb/graph",
+        graph_path: str | Path = ".kb/graph.db",
         use_mock_summarizer: bool = False,
         max_chunk_size: int = 1024,
         chunk_overlap: int = 50,
@@ -50,7 +50,7 @@ class EntityIngestionPipeline:
         """Initialize the entity ingestion pipeline.
 
         Args:
-            graph_path: Path to Kuzu graph database.
+            graph_path: Path to FalkorDB graph database file.
             use_mock_summarizer: Use mock summarizer (no LLM calls) for testing.
             max_chunk_size: Maximum chunk size in characters.
             chunk_overlap: Overlap between text chunks.
@@ -74,13 +74,13 @@ class EntityIngestionPipeline:
         )
 
         # Graph store (lazy init)
-        self._graph_store: KuzuGraphStore | None = None
+        self._graph_store: FalkorDBGraphStore | None = None
         self._extractor: EntityGraphExtractor | None = None
 
     def _init_graph(self) -> None:
         """Lazy initialization of graph store."""
         if self._graph_store is None:
-            self._graph_store = KuzuGraphStore(self._graph_path)
+            self._graph_store = FalkorDBGraphStore(self._graph_path)
             self._graph_store.initialize()
             self._extractor = EntityGraphExtractor(self._graph_store)
 

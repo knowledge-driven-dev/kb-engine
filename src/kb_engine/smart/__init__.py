@@ -3,7 +3,7 @@
 This module provides intelligent document processing with:
 - Template-aware parsing based on document kind
 - Hierarchical chunking with LLM-generated summaries
-- Kuzu graph store for knowledge graph
+- FalkorDB graph store for knowledge graph
 - ChromaDB for vector embeddings (TODO)
 - SQLite for metadata and traceability (TODO)
 """
@@ -13,7 +13,7 @@ from kb_engine.smart.extraction import EntityGraphExtractor
 from kb_engine.smart.parsers import DocumentKindDetector, EntityParser
 from kb_engine.smart.pipelines import EntityIngestionPipeline
 from kb_engine.smart.schemas import ENTITY_SCHEMA
-from kb_engine.smart.stores import KuzuGraphStore
+from kb_engine.smart.stores import FalkorDBGraphStore, KuzuGraphStore
 from kb_engine.smart.types import (
     ContextualizedChunk,
     ExtractedEntityInfo,
@@ -39,7 +39,8 @@ __all__ = [
     "LLMSummaryService",
     "MockSummaryService",
     # Stores
-    "KuzuGraphStore",
+    "FalkorDBGraphStore",
+    "KuzuGraphStore",  # deprecated alias for FalkorDBGraphStore
     # Extraction
     "EntityGraphExtractor",
     # Pipelines

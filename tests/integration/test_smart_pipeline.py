@@ -1,7 +1,6 @@
-"""Integration tests for the smart pipeline with Kuzu."""
+"""Integration tests for the smart pipeline with FalkorDB."""
 
 import asyncio
-import shutil
 from pathlib import Path
 
 import pytest
@@ -10,13 +9,13 @@ from kb_engine.smart import (
     DocumentKindDetector,
     EntityIngestionPipeline,
     EntityParser,
+    FalkorDBGraphStore,
     KDDDocumentKind,
-    KuzuGraphStore,
 )
 
 # Test fixtures
 FIXTURE_PATH = Path(__file__).parent.parent / "fixtures" / "entities" / "Usuario.md"
-TEST_GRAPH_PATH = Path("/tmp/kb-engine-test-graph")
+TEST_GRAPH_PATH = Path("/tmp/kb-engine-test-graph.db")
 
 
 @pytest.fixture(autouse=True)
@@ -24,10 +23,7 @@ def cleanup_graph():
     """Clean up test graph before and after tests."""
     def _cleanup():
         if TEST_GRAPH_PATH.exists():
-            if TEST_GRAPH_PATH.is_dir():
-                shutil.rmtree(TEST_GRAPH_PATH)
-            else:
-                TEST_GRAPH_PATH.unlink()
+            TEST_GRAPH_PATH.unlink()
     _cleanup()
     yield
     _cleanup()
@@ -98,12 +94,12 @@ class TestEntityParser:
         assert len(entity_info.events_emitted) >= 5
 
 
-class TestKuzuGraphStore:
-    """Tests for Kuzu graph store."""
+class TestFalkorDBGraphStore:
+    """Tests for FalkorDB graph store."""
 
     def test_initialize_and_upsert(self):
         """Should initialize store and upsert entities."""
-        store = KuzuGraphStore(TEST_GRAPH_PATH)
+        store = FalkorDBGraphStore(TEST_GRAPH_PATH)
         store.initialize()
 
         # Upsert entity
@@ -126,7 +122,7 @@ class TestKuzuGraphStore:
 
     def test_relationships(self):
         """Should create and query relationships."""
-        store = KuzuGraphStore(TEST_GRAPH_PATH)
+        store = FalkorDBGraphStore(TEST_GRAPH_PATH)
         store.initialize()
 
         # Create entities
@@ -236,12 +232,12 @@ El usuario inicia sesión.
 async def main():
     """Run a quick test of the pipeline."""
     print("=" * 60)
-    print("Testing Smart Pipeline with Kuzu")
+    print("Testing Smart Pipeline with FalkorDB")
     print("=" * 60)
 
     # Clean up
     if TEST_GRAPH_PATH.exists():
-        shutil.rmtree(TEST_GRAPH_PATH)
+        TEST_GRAPH_PATH.unlink()
 
     content = FIXTURE_PATH.read_text()
     print(f"\nLoaded: {FIXTURE_PATH.name} ({len(content)} chars)")
@@ -275,7 +271,7 @@ async def main():
         print(f"  - {e['name']} ({e['code']})")
 
     print("\nRelationships from Usuario:")
-    # Query each relationship type separately (Kuzu doesn't have type() function)
+    # Query each relationship type
     for rel_type in ["CONTAINS", "REFERENCES", "PRODUCES", "CONSUMES"]:
         rels = pipeline.query_graph(f"""
             MATCH (e:Entity {{name: 'Usuario'}})-[r:{rel_type}]->(n)
