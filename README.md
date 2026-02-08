@@ -1,117 +1,191 @@
 # KB-Engine
 
-A hybrid RAG (Retrieval-Augmented Generation) system for knowledge base management.
+Sistema de retrieval de conocimiento para agentes de IA. Indexa documentación estructurada (KDD) y devuelve **referencias** a documentos relevantes, no contenido.
 
-## Overview
+## Concepto
 
-KB-Engine is designed to index, store, and retrieve knowledge from structured documents (KDD - Knowledge Domain Documents). It implements a tri-store architecture:
+KB-Engine actúa como un "bibliotecario": cuando un agente pregunta algo, responde con URLs y anclas a los documentos relevantes (`file://path/to/doc.md#seccion`), permitiendo que el agente decida qué leer.
 
-- **PostgreSQL**: Traceability store for documents, chunks, and metadata
-- **Qdrant**: Vector store for semantic similarity search
-- **Neo4j**: Graph store for entity relationships
+```
+┌─────────────┐     query      ┌─────────────┐     referencias     ┌─────────────┐
+│   Agente    │ ─────────────▶ │  KB-Engine  │ ──────────────────▶ │  Agente lee │
+│     IA      │                │ (retrieval) │                     │  documentos │
+└─────────────┘                └─────────────┘                     └─────────────┘
+```
 
-## Features
+## Arquitectura
 
-- Semantic chunking with specialized strategies (entities, use cases, rules, processes)
-- Multi-modal entity extraction (frontmatter, patterns, LLM)
-- Hybrid retrieval combining vector and graph search
-- RESTful API with FastAPI
-- Full traceability and audit capabilities
+### Dual Stack
+
+| Componente | Local (P2P) | Servidor |
+|------------|-------------|----------|
+| **Trazabilidad** | SQLite | PostgreSQL |
+| **Vectores** | ChromaDB | Qdrant |
+| **Grafos** | Kuzu | Neo4j |
+| **Embeddings** | sentence-transformers | OpenAI |
+
+### Modelo Distribuido
+
+```
+┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
+│  Desarrollador 1 │     │  Desarrollador 2 │     │  Desarrollador N │
+│  (indexa local)  │     │  (indexa local)  │     │  (indexa local)  │
+└────────┬─────────┘     └────────┬─────────┘     └────────┬─────────┘
+         │                        │                        │
+         └────────────────────────┼────────────────────────┘
+                                  ▼
+                         ┌──────────────────┐
+                         │  Servidor Central │
+                         │  (merge + search) │
+                         └──────────────────┘
+```
+
+Cada desarrollador indexa localmente con embeddings deterministas. El servidor central hace merge y ofrece búsqueda unificada.
+
+## Características
+
+- **Chunking semántico KDD**: Estrategias específicas para entidades, casos de uso, reglas, procesos
+- **Soporte ES/EN**: Detecta patrones en español e inglés
+- **Grafo de conocimiento**: Entidades, conceptos, eventos y sus relaciones (Kuzu/Neo4j)
+- **Smart Ingestion**: Pipeline inteligente con detección de tipo de documento
+- **CLI**: Interfaz principal via `kb` command
 
 ## Quick Start
 
-### Prerequisites
+### Requisitos
 
 - Python 3.11+
-- Docker and Docker Compose
+- (Opcional) Docker para modo servidor
 
-### Development Setup
+### Instalación
 
 ```bash
-# Clone the repository
+# Clonar
 git clone <repository-url>
 cd kb-engine
 
-# Run the setup script
-chmod +x scripts/setup_dev.sh
-./scripts/setup_dev.sh
-
-# Or manually:
-python -m venv .venv
+# Entorno virtual
+python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
-pre-commit install
 
-# Start infrastructure
-docker compose -f docker/docker-compose.yml up -d
-
-# Run the server
-make dev
+# Verificar
+pytest tests/ -v
 ```
 
-### Running Tests
+### Uso (CLI)
 
 ```bash
-# All tests
-make test
+# Indexar documentos
+kb index ./docs/domain/
 
-# Unit tests only
-make test-unit
+# Buscar
+kb search "¿cómo se registra un usuario?"
 
-# With coverage
-make test-cov
+# Ver estado
+kb status
+
+# Sincronizar con servidor
+kb sync --remote https://kb.example.com
 ```
 
-## Project Structure
+## Estructura del Proyecto
 
 ```
 kb-engine/
 ├── src/kb_engine/
-│   ├── core/           # Domain models and interfaces
-│   ├── repositories/   # Data store implementations
-│   ├── chunking/       # Semantic chunking strategies
-│   ├── extraction/     # Entity extraction pipeline
-│   ├── embedding/      # Embedding generation
-│   ├── pipelines/      # Indexation and inference pipelines
-│   ├── services/       # Business logic
-│   ├── api/            # FastAPI REST API
-│   └── config/         # Configuration
+│   ├── core/           # Modelos de dominio e interfaces
+│   ├── smart/          # Pipeline de ingesta inteligente (Kuzu)
+│   │   ├── parsers/    # Detectores y parsers KDD
+│   │   ├── chunking/   # Chunking jerárquico con contexto
+│   │   ├── extraction/ # Extracción de entidades para grafo
+│   │   ├── stores/     # KuzuGraphStore
+│   │   └── pipelines/  # EntityIngestionPipeline
+│   ├── repositories/   # Implementaciones de storage
+│   ├── chunking/       # Estrategias de chunking clásicas
+│   ├── extraction/     # Pipeline de extracción legacy
+│   ├── pipelines/      # Pipelines de indexación/retrieval
+│   ├── services/       # Lógica de negocio
+│   ├── api/            # REST API (FastAPI)
+│   └── cli/            # Comandos CLI (Click)
 ├── tests/
-├── docker/
-├── migrations/
-└── docs/design/        # ADRs and design documents
+│   ├── unit/
+│   └── integration/
+└── docs/design/        # ADRs y documentos de diseño
 ```
 
-## API Endpoints
+## Documentos KDD Soportados
 
-- `GET /health` - Health check
-- `POST /api/v1/inference/search` - Search the knowledge base
-- `POST /api/v1/indexing/documents` - Index a new document
-- `GET /api/v1/indexing/documents` - List documents
-- `POST /api/v1/curation/nodes` - Manage knowledge graph nodes
+| Tipo | Descripción |
+|------|-------------|
+| `entity` | Entidades de dominio (Usuario, Producto, etc.) |
+| `use-case` | Casos de uso del sistema |
+| `rule` | Reglas de negocio |
+| `process` | Procesos y flujos |
+| `event` | Eventos de dominio |
+| `glossary` | Términos y definiciones |
 
-## Configuration
-
-Copy `.env.example` to `.env` and configure:
+## API
 
 ```bash
-cp .env.example .env
+# Health check
+GET /health
+
+# Búsqueda (devuelve referencias)
+POST /api/v1/retrieval/search
+{
+  "query": "registro de usuario",
+  "top_k": 5
+}
+
+# Indexar documento
+POST /api/v1/indexing/documents
+
+# Listar documentos
+GET /api/v1/indexing/documents
 ```
 
-Key settings:
-- `DATABASE_URL`: PostgreSQL connection string
-- `QDRANT_HOST/PORT`: Qdrant connection
-- `NEO4J_URI/USER/PASSWORD`: Neo4j connection
-- `OPENAI_API_KEY`: For embeddings and LLM extraction
+## Tests
 
-## Architecture
+```bash
+# Todos los tests
+pytest tests/ -v
 
-See the design documents in `docs/design/` for detailed ADRs:
+# Solo unitarios
+pytest tests/unit/ -v
 
-- ADR-0001: Repository pattern for data stores
-- ADR-0002: Semantic chunking strategy
-- ADR-0003: Entity extraction pipeline
+# Solo integración
+pytest tests/integration/ -v
 
-## License
+# Con coverage
+pytest tests/ --cov=kb_engine
+```
+
+## Configuración
+
+Variables de entorno (`.env`):
+
+```bash
+# Modo local (por defecto)
+KB_PROFILE=local
+
+# Modo servidor
+KB_PROFILE=server
+DATABASE_URL=postgresql://...
+QDRANT_HOST=localhost
+QDRANT_PORT=6333
+NEO4J_URI=bolt://localhost:7687
+OPENAI_API_KEY=sk-...
+```
+
+## Roadmap
+
+- [x] Stack local con SQLite + ChromaDB
+- [x] Smart ingestion pipeline con Kuzu
+- [ ] CLI completo (`kb index/search/sync/status`)
+- [ ] Sincronización P2P con servidor
+- [ ] Integración MCP para agentes
+
+## Licencia
 
 MIT
