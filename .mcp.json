@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "kb-engine": {
+      "command": ".venv/bin/python",
+      "args": ["-m", "kb_engine.mcp_server"]
+    }
+  }
+}

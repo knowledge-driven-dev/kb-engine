@@ -32,6 +32,8 @@ dependencies = [
     "aiosqlite>=0.19.0",
     "chromadb>=0.4.0",
     "sentence-transformers>=2.3.0",
+    "kuzu>=0.4.0",
+    "pandas>=2.0.0",
     "click>=8.0",
 ]
 
@@ -43,6 +45,9 @@ server = [
     "qdrant-client>=1.7.0",
     "neo4j>=5.16.0",
     "openai>=1.10.0",
+]
+mcp = [
+    "mcp>=1.0.0",
 ]
 dev = [
     "pytest>=8.0.0",
@@ -58,6 +63,7 @@ dev = [
 [project.scripts]
 kb-engine = "kb_engine.api.main:run"
 kb = "kb_engine.cli:cli"
+kb-mcp = "kb_engine.mcp_server:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/kb_engine"]
@@ -113,6 +119,8 @@ module = [
     "frontmatter.*",
     "chromadb.*",
     "sentence_transformers.*",
+    "kuzu.*",
+    "mcp.*",
 ]
 ignore_missing_imports = true
 
