@@ -59,27 +59,34 @@ class IndexationPipeline:
             document.content_hash = compute_content_hash(document.content)
 
             # 1. Save document to traceability store
+            logger.debug("Step 1/8: saving document", title=document.title)
             document = await self._traceability.save_document(document)
 
             # 2. Chunk the document
+            logger.debug("Step 2/8: chunking document", title=document.title)
             parser = document.metadata.get("_parser", "markdown")
             chunks = self._chunker.chunk_document(document, parser=parser)
 
             # 3. Compute section anchors from heading paths
+            logger.debug("Step 3/8: computing anchors", chunks=len(chunks))
             for chunk in chunks:
                 chunk.section_anchor = heading_path_to_anchor(chunk.heading_path)
 
             # 4. Save chunks to traceability store
+            logger.debug("Step 4/8: saving chunks", chunks=len(chunks))
             chunks = await self._traceability.save_chunks(chunks)
 
             # 5. Generate embeddings
+            logger.debug("Step 5/8: generating embeddings", chunks=len(chunks))
             embeddings = await self._embedding_provider.embed_chunks(chunks)
 
             # 6. Store embeddings in vector store
+            logger.debug("Step 6/8: storing embeddings", count=len(embeddings))
             await self._vector.upsert_embeddings(embeddings)
 
             # 7. Extract entities and store in graph (if graph repo available)
             if self._graph is not None:
+                logger.debug("Step 7/8: extracting entities", title=document.title)
                 extraction_result = await self._extraction_pipeline.extract_document(
                     document, chunks
                 )
@@ -96,6 +103,7 @@ class IndexationPipeline:
                     await self._graph.create_node(node)
 
             # 8. Update document status
+            logger.debug("Step 8/8: updating status", title=document.title)
             document.status = DocumentStatus.INDEXED
             document.indexed_at = datetime.utcnow()
             document = await self._traceability.update_document(document)
