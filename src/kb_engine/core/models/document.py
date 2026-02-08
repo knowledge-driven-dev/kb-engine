@@ -5,7 +5,7 @@ from enum import Enum
 from typing import Any
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class DocumentStatus(str, Enum):
@@ -36,6 +36,12 @@ class Document(BaseModel):
     """
 
     id: UUID = Field(default_factory=uuid4)
+
+    @field_validator("id", mode="before")
+    @classmethod
+    def _ensure_id(cls, v: Any) -> Any:
+        return v if v is not None else uuid4()
+
     external_id: str | None = None
     title: str
     content: str
