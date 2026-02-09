@@ -10,7 +10,7 @@ import structlog
 
 from kb_engine.chunking import ChunkerFactory, ChunkingConfig
 from kb_engine.core.exceptions import PipelineError
-from kb_engine.core.models.document import Document, DocumentStatus
+from kb_engine.core.models.document import Document, DocumentStatus, KDDStatus
 from kb_engine.core.models.repository import (
     EXTENSION_DEFAULTS,
     FileTypeConfig,
@@ -88,10 +88,14 @@ class IndexationPipeline:
             parser = document.metadata.get("_parser", "markdown")
             chunks = self._chunker.chunk_document(document, parser=parser)
 
-            # 3. Compute section anchors from heading paths
+            # 3. Compute section anchors and propagate KDD status to chunks
             logger.debug("Step 3/8: computing anchors", chunks=len(chunks))
             for chunk in chunks:
                 chunk.section_anchor = heading_path_to_anchor(chunk.heading_path)
+                # Propagate KDD lifecycle fields to chunk metadata
+                chunk.metadata["kdd_status"] = document.kdd_status.value
+                if document.kdd_version:
+                    chunk.metadata["kdd_version"] = document.kdd_version
 
             # 4. Save chunks to traceability store
             logger.debug("Step 4/8: saving chunks", chunks=len(chunks))
@@ -193,6 +197,10 @@ class IndexationPipeline:
 
         metadata = {**frontmatter, "_parser": ft_config.parser}
 
+        # Extract KDD lifecycle fields from frontmatter
+        kdd_status = KDDStatus.from_string(frontmatter.get("status"))
+        kdd_version = frontmatter.get("version")
+
         kwargs: dict = dict(
             title=frontmatter.get("title", title),
             content=content,
@@ -206,6 +214,8 @@ class IndexationPipeline:
             relative_path=relative_path,
             git_commit=commit,
             git_remote_url=remote_url,
+            kdd_status=kdd_status,
+            kdd_version=kdd_version,
         )
         if existing_id is not None:
             kwargs["id"] = existing_id

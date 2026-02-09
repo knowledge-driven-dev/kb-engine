@@ -34,15 +34,19 @@ class EmbeddingProvider(ABC):
     async def embed_chunk(self, chunk: Chunk) -> Embedding:
         """Generate embedding for a chunk."""
         vector = await self.embed_text(chunk.content)
+        metadata = {
+            "chunk_type": chunk.chunk_type.value,
+            "kdd_status": chunk.metadata.get("kdd_status", "approved"),
+        }
+        if chunk.metadata.get("kdd_version"):
+            metadata["kdd_version"] = chunk.metadata["kdd_version"]
         return Embedding(
             chunk_id=chunk.id,
             document_id=chunk.document_id,
             vector=vector,
             model=self.model_name,
             dimensions=self.dimensions,
-            metadata={
-                "chunk_type": chunk.chunk_type.value,
-            },
+            metadata=metadata,
         )
 
     async def embed_chunks(self, chunks: list[Chunk]) -> list[Embedding]:
@@ -52,6 +56,12 @@ class EmbeddingProvider(ABC):
 
         embeddings = []
         for chunk, vector in zip(chunks, vectors, strict=True):
+            metadata = {
+                "chunk_type": chunk.chunk_type.value,
+                "kdd_status": chunk.metadata.get("kdd_status", "approved"),
+            }
+            if chunk.metadata.get("kdd_version"):
+                metadata["kdd_version"] = chunk.metadata["kdd_version"]
             embeddings.append(
                 Embedding(
                     chunk_id=chunk.id,
@@ -59,9 +69,7 @@ class EmbeddingProvider(ABC):
                     vector=vector,
                     model=self.model_name,
                     dimensions=self.dimensions,
-                    metadata={
-                        "chunk_type": chunk.chunk_type.value,
-                    },
+                    metadata=metadata,
                 )
             )
 

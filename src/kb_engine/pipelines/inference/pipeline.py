@@ -135,6 +135,8 @@ class RetrievalPipeline:
                     chunk_type=chunk.chunk_type.value,
                     metadata=chunk.metadata,
                     retrieval_mode=RetrievalMode.VECTOR,
+                    kdd_status=document.kdd_status.value,
+                    kdd_version=document.kdd_version,
                 )
             )
 
@@ -268,6 +270,8 @@ class RetrievalPipeline:
                     chunk_type=chunk_type,
                     metadata=metadata,
                     retrieval_mode=RetrievalMode.GRAPH,
+                    kdd_status=document.kdd_status.value,
+                    kdd_version=document.kdd_version,
                 )
             )
 

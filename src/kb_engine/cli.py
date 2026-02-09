@@ -116,20 +116,31 @@ def index(repo_path: str, name: str | None, pattern: tuple[str, ...], exclude: t
 @click.option("--threshold", "-t", type=float, default=None, help="Min score threshold")
 @click.option("--json", "output_json", is_flag=True, help="Output results as JSON")
 @click.option("--mode", "-m", type=click.Choice(["vector", "graph", "hybrid"]), default="vector", help="Retrieval mode")
-def search(query: str, limit: int, threshold: float | None, output_json: bool, mode: str) -> None:
+@click.option("--status", "-s", multiple=True, help="Include documents with these statuses (default: approved). Can repeat.")
+@click.option("--include-all", is_flag=True, help="Include documents of all statuses")
+def search(query: str, limit: int, threshold: float | None, output_json: bool, mode: str, status: tuple[str, ...], include_all: bool) -> None:
     """Search the knowledge base.
 
     Returns document references with URLs pointing to exact sections.
+    By default, only 'approved' documents are searched. Use --status to include
+    other statuses (draft, proposed, deprecated) or --include-all for everything.
     """
     import json
 
-    from kb_engine.core.models.search import RetrievalMode
+    from kb_engine.core.models.search import RetrievalMode, SearchFilters
 
     mode_map = {
         "vector": RetrievalMode.VECTOR,
         "graph": RetrievalMode.GRAPH,
         "hybrid": RetrievalMode.HYBRID,
     }
+
+    # Build status filters
+    filters = None
+    if include_all:
+        filters = SearchFilters(include_all_statuses=True)
+    elif status:
+        filters = SearchFilters(include_statuses=list(status))
 
     async def _search():
         _, retrieval_service, factory = await _create_services()
@@ -139,6 +150,7 @@ def search(query: str, limit: int, threshold: float | None, output_json: bool, m
                 limit=limit,
                 score_threshold=threshold,
                 mode=mode_map[mode],
+                filters=filters,
             )
 
             if output_json:
@@ -160,6 +172,8 @@ def search(query: str, limit: int, threshold: float | None, output_json: bool, m
                             "tags": ref.tags,
                             "chunk_type": ref.chunk_type,
                             "retrieval_mode": ref.retrieval_mode.value,
+                            "kdd_status": ref.kdd_status,
+                            "kdd_version": ref.kdd_version,
                             "metadata": ref.metadata,
                         }
                         for ref in response.references

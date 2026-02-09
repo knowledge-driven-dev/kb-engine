@@ -9,13 +9,43 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class DocumentStatus(str, Enum):
-    """Document processing status."""
+    """Document processing status (internal workflow)."""
 
     PENDING = "pending"
     PROCESSING = "processing"
     INDEXED = "indexed"
     FAILED = "failed"
     ARCHIVED = "archived"
+
+
+class KDDStatus(str, Enum):
+    """KDD document lifecycle status (from frontmatter).
+
+    Controls visibility in search results:
+    - draft: Work in progress, not ready for review
+    - proposed: Ready for review, not yet approved
+    - approved: Official, included in default searches (alias: active)
+    - deprecated: Obsolete, excluded by default but preserved
+    """
+
+    DRAFT = "draft"
+    PROPOSED = "proposed"
+    APPROVED = "approved"
+    DEPRECATED = "deprecated"
+
+    @classmethod
+    def from_string(cls, value: str | None) -> "KDDStatus":
+        """Parse status from string, handling aliases."""
+        if value is None:
+            return cls.APPROVED  # Default
+        normalized = value.lower().strip()
+        # Handle aliases
+        if normalized == "active":
+            return cls.APPROVED
+        try:
+            return cls(normalized)
+        except ValueError:
+            return cls.APPROVED  # Default for unknown values
 
 
 class ChunkType(str, Enum):
@@ -52,6 +82,10 @@ class Document(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
     tags: list[str] = Field(default_factory=list)
     domain: str | None = None
+
+    # KDD lifecycle fields (from frontmatter)
+    kdd_status: KDDStatus = KDDStatus.APPROVED
+    kdd_version: str | None = None
 
     # Git-aware fields
     repo_name: str | None = None

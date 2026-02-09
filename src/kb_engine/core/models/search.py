@@ -32,6 +32,14 @@ class SearchFilters(BaseModel):
     # Chunk type filters
     chunk_types: list[str] | None = None
 
+    # KDD status filters
+    # By default, only "approved" documents are included
+    # Use include_statuses to expand (e.g., ["approved", "proposed"])
+    # Use exclude_statuses to explicitly exclude
+    include_statuses: list[str] | None = None  # None = ["approved"] by default
+    exclude_statuses: list[str] | None = None
+    include_all_statuses: bool = False  # Override to include everything
+
     # Date filters
     created_after: datetime | None = None
     created_before: datetime | None = None
@@ -41,6 +49,24 @@ class SearchFilters(BaseModel):
 
     class Config:
         frozen = True
+
+    def get_effective_statuses(self) -> list[str] | None:
+        """Get the list of statuses to include in search.
+
+        Returns None if all statuses should be included.
+        """
+        if self.include_all_statuses:
+            return None
+
+        if self.include_statuses:
+            statuses = set(self.include_statuses)
+        else:
+            statuses = {"approved"}  # Default
+
+        if self.exclude_statuses:
+            statuses -= set(self.exclude_statuses)
+
+        return list(statuses) if statuses else None
 
 
 class DocumentReference(BaseModel):
@@ -62,6 +88,10 @@ class DocumentReference(BaseModel):
     chunk_type: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
     retrieval_mode: RetrievalMode = RetrievalMode.VECTOR
+
+    # KDD lifecycle
+    kdd_status: str = "approved"
+    kdd_version: str | None = None
 
 
 class RetrievalResponse(BaseModel):

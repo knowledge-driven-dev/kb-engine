@@ -96,9 +96,20 @@ class ChromaRepository:
     ) -> list[tuple[UUID, float]]:
         collection = self._ensure_collection()
 
-        where_filter = None
+        where_conditions = []
+
+        # Apply KDD status filter (default: only approved)
         if filters:
-            where_conditions = []
+            effective_statuses = filters.get_effective_statuses()
+        else:
+            effective_statuses = ["approved"]  # Default
+
+        if effective_statuses:
+            where_conditions.append(
+                {"kdd_status": {"$in": effective_statuses}}
+            )
+
+        if filters:
             if filters.document_ids:
                 where_conditions.append(
                     {"document_id": {"$in": [str(d) for d in filters.document_ids]}}
@@ -111,10 +122,13 @@ class ChromaRepository:
                 where_conditions.append(
                     {"domain": {"$in": filters.domains}}
                 )
-            if len(where_conditions) == 1:
-                where_filter = where_conditions[0]
-            elif len(where_conditions) > 1:
-                where_filter = {"$and": where_conditions}
+
+        if len(where_conditions) == 1:
+            where_filter = where_conditions[0]
+        elif len(where_conditions) > 1:
+            where_filter = {"$and": where_conditions}
+        else:
+            where_filter = None
 
         results = collection.query(
             query_embeddings=[query_vector],
