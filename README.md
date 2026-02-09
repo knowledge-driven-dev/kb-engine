@@ -21,7 +21,7 @@ KB-Engine actúa como un "bibliotecario": cuando un agente pregunta algo, respon
 |------------|-------------|----------|
 | **Trazabilidad** | SQLite | PostgreSQL |
 | **Vectores** | ChromaDB | Qdrant |
-| **Grafos** | Kuzu | Neo4j |
+| **Grafos** | FalkorDBLite | Neo4j |
 | **Embeddings** | sentence-transformers | OpenAI |
 
 ### Modelo Distribuido
@@ -46,7 +46,7 @@ Cada desarrollador indexa localmente con embeddings deterministas. El servidor c
 
 - **Chunking semántico KDD**: Estrategias específicas para entidades, casos de uso, reglas, procesos
 - **Soporte ES/EN**: Detecta patrones en español e inglés
-- **Grafo de conocimiento**: Entidades, conceptos, eventos y sus relaciones (Kuzu/Neo4j)
+- **Grafo de conocimiento**: Entidades, conceptos, eventos y sus relaciones (FalkorDB/Neo4j)
 - **Smart Ingestion**: Pipeline inteligente con detección de tipo de documento
 - **CLI**: Interfaz principal via `kb` command
 
@@ -54,23 +54,42 @@ Cada desarrollador indexa localmente con embeddings deterministas. El servidor c
 
 ### Requisitos
 
-- Python 3.11+
+- Python 3.11+ (recomendado 3.12)
 - (Opcional) Docker para modo servidor
 
-### Instalación
+### Instalación (Modo Local)
 
 ```bash
 # Clonar
-git clone <repository-url>
+git clone https://github.com/leored/kb-engine.git
 cd kb-engine
 
-# Entorno virtual
+# Crear entorno virtual con Python 3.12
 python3.12 -m venv .venv
 source .venv/bin/activate
+
+# Instalar dependencias
 pip install -e ".[dev]"
 
-# Verificar
+# Verificar instalación
 pytest tests/ -v
+```
+
+### Instalación (Modo Servidor)
+
+```bash
+# Instalar con dependencias de servidor
+pip install -e ".[dev,server]"
+
+# Copiar configuración
+cp .env.example .env
+# Editar .env con tus credenciales
+
+# Levantar servicios (PostgreSQL, Qdrant, Neo4j)
+docker compose -f docker/docker-compose.yml up -d
+
+# Ejecutar migraciones
+alembic upgrade head
 ```
 
 ### Uso (CLI)
@@ -89,25 +108,68 @@ kb status
 kb sync --remote https://kb.example.com
 ```
 
+### Administración del grafo (`kb graph`)
+
+Comandos para explorar, inspeccionar y administrar el grafo de conocimiento (FalkorDB).
+Todos soportan `--json` para salida estructurada.
+
+```bash
+# Estadísticas del grafo
+kb graph stats
+
+# Listar nodos (opcionalmente filtrar por tipo)
+kb graph ls
+kb graph ls --type entity
+
+# Inspeccionar un nodo: vecindario + proveniencia
+kb graph inspect entity:User
+kb graph inspect entity:User -d 3    # profundidad personalizada
+
+# Verificar alcanzabilidad entre dos nodos
+kb graph path entity:User entity:Order
+kb graph path entity:User entity:Order --max-depth 3
+
+# Nodos extraídos de un documento
+kb graph impact doc-1
+
+# Documentos que contribuyeron a un nodo
+kb graph provenance entity:User
+
+# Consulta Cypher directa
+kb graph cypher "MATCH (n) RETURN labels(n)[0] as type, count(n) as cnt"
+
+# Eliminar un nodo (pide confirmación, -f para omitirla)
+kb graph delete entity:Obsolete
+kb graph delete entity:Obsolete -f
+
+# Calidad del grafo
+kb graph orphans           # entidades stub sin documento primario
+kb graph completeness      # estado de completitud por entidad
+kb graph completeness -s stub
+```
+
 ## Estructura del Proyecto
 
 ```
 kb-engine/
 ├── src/kb_engine/
 │   ├── core/           # Modelos de dominio e interfaces
-│   ├── smart/          # Pipeline de ingesta inteligente (Kuzu)
+│   ├── smart/          # Pipeline de ingesta inteligente (FalkorDB)
 │   │   ├── parsers/    # Detectores y parsers KDD
 │   │   ├── chunking/   # Chunking jerárquico con contexto
 │   │   ├── extraction/ # Extracción de entidades para grafo
-│   │   ├── stores/     # KuzuGraphStore
+│   │   ├── stores/     # FalkorDBGraphStore
+│   │   ├── schemas/    # Esquemas de templates KDD
 │   │   └── pipelines/  # EntityIngestionPipeline
 │   ├── repositories/   # Implementaciones de storage
 │   ├── chunking/       # Estrategias de chunking clásicas
 │   ├── extraction/     # Pipeline de extracción legacy
+│   ├── embedding/      # Configuración de embeddings
 │   ├── pipelines/      # Pipelines de indexación/retrieval
 │   ├── services/       # Lógica de negocio
 │   ├── api/            # REST API (FastAPI)
-│   └── cli/            # Comandos CLI (Click)
+│   ├── cli.py          # Comandos CLI (Click)
+│   └── mcp_server.py   # Servidor MCP para agentes
 ├── tests/
 │   ├── unit/
 │   └── integration/
@@ -181,10 +243,10 @@ OPENAI_API_KEY=sk-...
 ## Roadmap
 
 - [x] Stack local con SQLite + ChromaDB
-- [x] Smart ingestion pipeline con Kuzu
-- [ ] CLI completo (`kb index/search/sync/status`)
+- [x] Smart ingestion pipeline con FalkorDB
+- [x] CLI completo (`kb index/search/sync/status/graph`)
+- [x] Integración MCP para agentes
 - [ ] Sincronización P2P con servidor
-- [ ] Integración MCP para agentes
 
 ## Licencia
 
