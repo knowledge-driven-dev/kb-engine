@@ -473,41 +473,73 @@ class FalkorDBGraphStore:
         )
         return results[0] if results else None
 
-    def get_entity_graph(self, entity_id: str, depth: int = 2) -> dict:
-        """Get an entity and all related nodes up to depth.
+    def get_node_graph(self, node_id: str, depth: int = 2) -> dict:
+        """Get a node and all related nodes up to depth.
 
+        Works with any node type (Entity, Concept, Event).
         Filters out EXTRACTED_FROM edges to only return domain relationships.
         """
         # Domain relationship types only (exclude EXTRACTED_FROM)
         domain_rels = "CONTAINS|REFERENCES|PRODUCES|CONSUMES"
         nodes = self.execute_cypher(
             f"""
-            MATCH (e:Entity {{id: $id}})-[:{domain_rels}*1..{depth}]-(n)
+            MATCH (e {{id: $id}})-[:{domain_rels}*1..{depth}]-(n)
             RETURN DISTINCT labels(n)[0] as node_type, n.id as id, n.name as name
             """,
-            {"id": entity_id},
+            {"id": node_id},
         )
 
         edges = self.execute_cypher(
             f"""
-            MATCH (e:Entity {{id: $id}})-[r:{domain_rels}]-()
+            MATCH (e {{id: $id}})-[r:{domain_rels}]-()
             RETURN DISTINCT type(r) as rel_type
             """,
-            {"id": entity_id},
+            {"id": node_id},
         )
         edge_types = [e["rel_type"] for e in edges]
 
         return {
-            "center": entity_id,
+            "center": node_id,
             "nodes": nodes,
             "edge_types": edge_types,
         }
+
+    def get_entity_graph(self, entity_id: str, depth: int = 2) -> dict:
+        """Get an entity and all related nodes up to depth.
+
+        Deprecated: use get_node_graph() instead.
+        """
+        return self.get_node_graph(entity_id, depth)
 
     def get_all_entities(self) -> list[dict]:
         """Get all entities."""
         return self.execute_cypher(
             "MATCH (e:Entity) RETURN e.id as id, e.name as name, e.code_class as code_class"
         )
+
+    def get_all_nodes(self, node_type: str | None = None) -> list[dict]:
+        """Get all domain nodes (Entity, Concept, Event).
+
+        Args:
+            node_type: Optional filter - "entity", "concept", or "event".
+                       If None, returns all domain node types.
+
+        Returns:
+            List of dicts with label, id, name.
+        """
+        if node_type:
+            label = node_type.capitalize()
+            return self.execute_cypher(
+                f"MATCH (n:{label}) RETURN '{label}' as label, n.id as id, n.name as name ORDER BY n.name"
+            )
+        # Return all domain node types
+        results = []
+        for label in ["Entity", "Concept", "Event"]:
+            rows = self.execute_cypher(
+                f"MATCH (n:{label}) RETURN '{label}' as label, n.id as id, n.name as name ORDER BY n.name"
+            )
+            results.extend(rows)
+        return results
 
     def find_path(
         self,
@@ -618,6 +650,21 @@ class FalkorDBGraphStore:
 
     # === Utility ===
 
+    def delete_node(self, node_id: str) -> bool:
+        """Delete a single node and all its relationships.
+
+        Args:
+            node_id: The node ID to delete.
+
+        Returns:
+            True if the node was found and deleted, False otherwise.
+        """
+        result = self.graph.query(
+            "MATCH (n {id: $id}) DETACH DELETE n",
+            params={"id": node_id},
+        )
+        return result.nodes_deleted > 0
+
     def delete_by_source_doc(self, source_doc_id: str) -> None:
         """Delete a document and its exclusive nodes using cascade.
 
@@ -657,16 +704,28 @@ class FalkorDBGraphStore:
                 pass
 
         # Step 3: Delete orphan nodes (no EXTRACTED_FROM to any Document)
+        # FalkorDB doesn't support OPTIONAL MATCH + WITH WHERE IS NULL + DELETE,
+        # so we use a two-step approach: find orphan IDs, then delete each.
         for node_type in ["Entity", "Concept", "Event"]:
             try:
-                self.graph.query(
-                    f"""
-                    MATCH (n:{node_type})
-                    OPTIONAL MATCH (n)-[r:EXTRACTED_FROM]->(:Document)
-                    WITH n WHERE r IS NULL
-                    DETACH DELETE n
-                    """,
+                # Find IDs that have EXTRACTED_FROM edges
+                linked = self.execute_cypher(
+                    f"MATCH (n:{node_type})-[:EXTRACTED_FROM]->(:Document) RETURN DISTINCT n.id as id"
                 )
+                linked_ids = {r["id"] for r in linked}
+
+                # Find all IDs of this type
+                all_nodes = self.execute_cypher(
+                    f"MATCH (n:{node_type}) RETURN n.id as id"
+                )
+
+                # Delete orphans (those without EXTRACTED_FROM)
+                for node in all_nodes:
+                    if node["id"] not in linked_ids:
+                        self.graph.query(
+                            f"MATCH (n:{node_type} {{id: $id}}) DETACH DELETE n",
+                            params={"id": node["id"]},
+                        )
             except Exception:
                 pass
 

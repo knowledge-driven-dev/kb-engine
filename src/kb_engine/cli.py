@@ -285,6 +285,17 @@ def status() -> None:
     run_async(_status())
 
 
+def _get_graph_store():
+    """Create and initialize a FalkorDB graph store from settings."""
+    from kb_engine.config.settings import get_settings
+    from kb_engine.smart.stores.falkordb_graph import FalkorDBGraphStore
+
+    settings = get_settings()
+    store = FalkorDBGraphStore(settings.falkordb_path)
+    store.initialize()
+    return store
+
+
 @cli.group()
 def graph() -> None:
     """Graph-related commands."""
@@ -301,13 +312,7 @@ def graph_orphans(output_json: bool) -> None:
     """
     import json
 
-    from kb_engine.config.settings import get_settings
-    from kb_engine.smart.stores.falkordb_graph import FalkorDBGraphStore
-
-    settings = get_settings()
-    store = FalkorDBGraphStore(settings.falkordb_path)
-    store.initialize()
-
+    store = _get_graph_store()
     orphans = store.get_orphan_entities()
 
     if output_json:
@@ -337,13 +342,7 @@ def graph_completeness(output_json: bool, status: str | None) -> None:
     """
     import json
 
-    from kb_engine.config.settings import get_settings
-    from kb_engine.smart.stores.falkordb_graph import FalkorDBGraphStore
-
-    settings = get_settings()
-    store = FalkorDBGraphStore(settings.falkordb_path)
-    store.initialize()
-
+    store = _get_graph_store()
     entities = store.get_entity_completeness()
 
     if status:
@@ -382,6 +381,237 @@ def graph_completeness(output_json: bool, status: str | None) -> None:
         click.echo(f"\n  Orphans ({len(by_status['orphan'])}):")
         for e in by_status["orphan"]:
             click.echo(f"    [ORPHAN] {e['name']}")
+
+
+@graph.command("stats")
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+def graph_stats(output_json: bool) -> None:
+    """Show graph database statistics."""
+    import json
+
+    store = _get_graph_store()
+    stats = store.get_stats()
+
+    if output_json:
+        click.echo(json.dumps(stats, indent=2))
+        return
+
+    click.echo("Graph Statistics:")
+    click.echo(f"  Entities:  {stats.get('entity_count', 0)}")
+    click.echo(f"  Concepts:  {stats.get('concept_count', 0)}")
+    click.echo(f"  Events:    {stats.get('event_count', 0)}")
+    click.echo(f"  Documents: {stats.get('document_count', 0)}")
+    total = sum(stats.get(f"{t}_count", 0) for t in ["entity", "concept", "event"])
+    click.echo(f"  Total domain nodes: {total}")
+
+
+@graph.command("ls")
+@click.option("--type", "node_type", type=click.Choice(["entity", "concept", "event"]), help="Filter by node type")
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+def graph_ls(node_type: str | None, output_json: bool) -> None:
+    """List all domain nodes in the graph."""
+    import json
+
+    store = _get_graph_store()
+    nodes = store.get_all_nodes(node_type)
+
+    if output_json:
+        click.echo(json.dumps({"nodes": nodes, "count": len(nodes)}, indent=2))
+        return
+
+    if not nodes:
+        click.echo("No nodes found.")
+        return
+
+    click.echo(f"Found {len(nodes)} nodes:\n")
+    for node in nodes:
+        click.echo(f"  [{node['label']}] {node['id']}  {node['name']}")
+
+
+@graph.command("inspect")
+@click.argument("node_id")
+@click.option("--depth", "-d", default=2, help="Traversal depth (default: 2)")
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+def graph_inspect(node_id: str, depth: int, output_json: bool) -> None:
+    """Inspect a node and its neighborhood.
+
+    Shows the node's properties, related nodes, and provenance.
+    """
+    import json
+
+    store = _get_graph_store()
+    neighborhood = store.get_node_graph(node_id, depth=depth)
+    provenance = store.get_node_provenance(node_id)
+
+    if output_json:
+        click.echo(json.dumps({
+            "neighborhood": neighborhood,
+            "provenance": provenance,
+        }, indent=2))
+        return
+
+    click.echo(f"Node: {node_id}")
+    click.echo(f"  Depth: {depth}")
+
+    if neighborhood["nodes"]:
+        click.echo(f"\n  Related nodes ({len(neighborhood['nodes'])}):")
+        for n in neighborhood["nodes"]:
+            click.echo(f"    [{n['node_type']}] {n['id']}  {n['name']}")
+    else:
+        click.echo("\n  No related nodes.")
+
+    if neighborhood["edge_types"]:
+        click.echo(f"\n  Relationship types: {', '.join(neighborhood['edge_types'])}")
+
+    if provenance:
+        click.echo(f"\n  Provenance ({len(provenance)} documents):")
+        for p in provenance:
+            click.echo(f"    [{p['role']}] {p['doc_id']}  {p['title']}")
+    else:
+        click.echo("\n  No provenance records.")
+
+
+@graph.command("path")
+@click.argument("from_id")
+@click.argument("to_id")
+@click.option("--max-depth", default=5, help="Maximum traversal depth (default: 5)")
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+def graph_path(from_id: str, to_id: str, max_depth: int, output_json: bool) -> None:
+    """Check reachability between two nodes."""
+    import json
+
+    store = _get_graph_store()
+    paths = store.find_path(from_id, to_id, max_depth=max_depth)
+
+    if output_json:
+        click.echo(json.dumps({
+            "from": from_id,
+            "to": to_id,
+            "max_depth": max_depth,
+            "reachable": len(paths) > 0,
+            "paths": paths,
+        }, indent=2))
+        return
+
+    if paths:
+        p = paths[0]
+        click.echo(f"Path found: {p['start_name']} -> {p['end_name']}")
+    else:
+        click.echo(f"No path found between {from_id} and {to_id} (max depth: {max_depth}).")
+
+
+@graph.command("impact")
+@click.argument("doc_id")
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+def graph_impact(doc_id: str, output_json: bool) -> None:
+    """Show nodes extracted from a document."""
+    import json
+
+    store = _get_graph_store()
+    nodes = store.get_document_impact(doc_id)
+
+    if output_json:
+        click.echo(json.dumps({"doc_id": doc_id, "nodes": nodes, "count": len(nodes)}, indent=2))
+        return
+
+    if not nodes:
+        click.echo(f"No nodes found for document: {doc_id}")
+        return
+
+    click.echo(f"Document {doc_id} impact ({len(nodes)} nodes):\n")
+    for n in nodes:
+        conf = f" (confidence: {n['confidence']:.2f})" if n.get("confidence") else ""
+        click.echo(f"  [{n['node_type']}] {n['id']}  {n['name']}  role={n['role']}{conf}")
+
+
+@graph.command("provenance")
+@click.argument("node_id")
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+def graph_provenance(node_id: str, output_json: bool) -> None:
+    """Show documents that contributed to a node."""
+    import json
+
+    store = _get_graph_store()
+    provenance = store.get_node_provenance(node_id)
+
+    if output_json:
+        click.echo(json.dumps({
+            "node_id": node_id,
+            "provenance": provenance,
+            "count": len(provenance),
+        }, indent=2))
+        return
+
+    if not provenance:
+        click.echo(f"No provenance records for node: {node_id}")
+        return
+
+    click.echo(f"Provenance for {node_id} ({len(provenance)} documents):\n")
+    for p in provenance:
+        click.echo(f"  [{p['role']}] {p['doc_id']}  {p['title']}")
+        if p.get("path"):
+            click.echo(f"         {p['path']}")
+
+
+@graph.command("cypher")
+@click.argument("query")
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+def graph_cypher(query: str, output_json: bool) -> None:
+    """Execute a raw Cypher query.
+
+    Example: kb graph cypher "MATCH (n) RETURN labels(n)[0] as type, count(n) as cnt"
+    """
+    import json
+
+    store = _get_graph_store()
+
+    try:
+        results = store.execute_cypher(query)
+    except Exception as e:
+        if output_json:
+            click.echo(json.dumps({"error": str(e)}, indent=2))
+        else:
+            click.echo(f"Cypher error: {e}", err=True)
+        sys.exit(1)
+
+    if output_json:
+        click.echo(json.dumps({"results": results, "count": len(results)}, indent=2))
+        return
+
+    if not results:
+        click.echo("Query returned no results.")
+        return
+
+    # Table output
+    headers = list(results[0].keys())
+    click.echo("  ".join(headers))
+    click.echo("  ".join("-" * len(h) for h in headers))
+    for row in results:
+        click.echo("  ".join(str(row.get(h, "")) for h in headers))
+
+
+@graph.command("delete")
+@click.argument("node_id")
+@click.option("--force", "-f", is_flag=True, help="Skip confirmation prompt")
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+def graph_delete(node_id: str, force: bool, output_json: bool) -> None:
+    """Delete a node and all its relationships."""
+    import json
+
+    if not force:
+        click.confirm(f"Delete node '{node_id}' and all its relationships?", abort=True)
+
+    store = _get_graph_store()
+    deleted = store.delete_node(node_id)
+
+    if output_json:
+        click.echo(json.dumps({"node_id": node_id, "deleted": deleted}, indent=2))
+        return
+
+    if deleted:
+        click.echo(f"Deleted node: {node_id}")
+    else:
+        click.echo(f"Node not found: {node_id}")
 
 
 if __name__ == "__main__":
