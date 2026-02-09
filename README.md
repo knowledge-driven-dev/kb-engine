@@ -57,18 +57,30 @@ Cada desarrollador indexa localmente con embeddings deterministas. El servidor c
 - Python 3.11+ (recomendado 3.12)
 - (Opcional) Docker para modo servidor
 
-### Instalación (Modo Local)
+### Instalación rápida
+
+```bash
+pip install git+https://github.com/knowledge-driven-dev/kb-engine.git
+```
+
+Para actualizar a la última versión:
+
+```bash
+pip install --upgrade --force-reinstall git+https://github.com/knowledge-driven-dev/kb-engine.git
+```
+
+### Instalación para desarrollo
 
 ```bash
 # Clonar
-git clone https://github.com/leored/kb-engine.git
+git clone https://github.com/knowledge-driven-dev/kb-engine.git
 cd kb-engine
 
 # Crear entorno virtual con Python 3.12
 python3.12 -m venv .venv
 source .venv/bin/activate
 
-# Instalar dependencias
+# Instalar dependencias (modo editable + herramientas de dev)
 pip install -e ".[dev]"
 
 # Verificar instalación
