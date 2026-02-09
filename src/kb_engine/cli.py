@@ -271,5 +271,104 @@ def status() -> None:
     run_async(_status())
 
 
+@cli.group()
+def graph() -> None:
+    """Graph-related commands."""
+    pass
+
+
+@graph.command("orphans")
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+def graph_orphans(output_json: bool) -> None:
+    """List stub entities without a primary document.
+
+    These are entities referenced by other documents but whose own
+    document hasn't been indexed yet.
+    """
+    import json
+
+    from kb_engine.config.settings import get_settings
+    from kb_engine.smart.stores.falkordb_graph import FalkorDBGraphStore
+
+    settings = get_settings()
+    store = FalkorDBGraphStore(settings.falkordb_path)
+    store.initialize()
+
+    orphans = store.get_orphan_entities()
+
+    if output_json:
+        click.echo(json.dumps({"orphans": orphans, "count": len(orphans)}, indent=2))
+        return
+
+    if not orphans:
+        click.echo("No orphan entities found. All referenced entities have primary documents.")
+        return
+
+    click.echo(f"Found {len(orphans)} orphan entities (stubs without primary document):\n")
+    for entity in orphans:
+        click.echo(f"  - {entity['name']} (confidence: {entity['confidence']:.2f})")
+        click.echo(f"    Referenced by: {', '.join(entity['referenced_by'])}")
+
+
+@graph.command("completeness")
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+@click.option("--status", "-s", type=click.Choice(["complete", "stub", "orphan"]), help="Filter by status")
+def graph_completeness(output_json: bool, status: str | None) -> None:
+    """Show completeness status for all entities.
+
+    Status types:
+    - complete: Has a primary document
+    - stub: Only referenced, no primary document yet
+    - orphan: No provenance edges at all
+    """
+    import json
+
+    from kb_engine.config.settings import get_settings
+    from kb_engine.smart.stores.falkordb_graph import FalkorDBGraphStore
+
+    settings = get_settings()
+    store = FalkorDBGraphStore(settings.falkordb_path)
+    store.initialize()
+
+    entities = store.get_entity_completeness()
+
+    if status:
+        entities = [e for e in entities if e["status"] == status]
+
+    if output_json:
+        click.echo(json.dumps({"entities": entities, "count": len(entities)}, indent=2))
+        return
+
+    if not entities:
+        click.echo("No entities found.")
+        return
+
+    # Group by status
+    by_status = {"complete": [], "stub": [], "orphan": []}
+    for e in entities:
+        by_status[e["status"]].append(e)
+
+    click.echo(f"Entity completeness ({len(entities)} total):\n")
+
+    if by_status["complete"]:
+        click.echo(f"  Complete ({len(by_status['complete'])}):")
+        for e in by_status["complete"][:10]:
+            docs = ", ".join(e["primary_docs"]) if e["primary_docs"] else "?"
+            click.echo(f"    [OK] {e['name']} <- {docs}")
+        if len(by_status["complete"]) > 10:
+            click.echo(f"    ... and {len(by_status['complete']) - 10} more")
+
+    if by_status["stub"]:
+        click.echo(f"\n  Stubs ({len(by_status['stub'])}):")
+        for e in by_status["stub"]:
+            refs = ", ".join(e["referenced_by"]) if e["referenced_by"] else "?"
+            click.echo(f"    [STUB] {e['name']} (referenced by: {refs})")
+
+    if by_status["orphan"]:
+        click.echo(f"\n  Orphans ({len(by_status['orphan'])}):")
+        for e in by_status["orphan"]:
+            click.echo(f"    [ORPHAN] {e['name']}")
+
+
 if __name__ == "__main__":
     cli()

@@ -562,6 +562,60 @@ class FalkorDBGraphStore:
             {"nid": node_id},
         )
 
+    def get_orphan_entities(self) -> list[dict]:
+        """Get entities that are only referenced but have no primary document.
+
+        These are "stub" entities created when processing references to entities
+        whose documents haven't been indexed yet. They have:
+        - confidence < 1.0 (typically 0.7)
+        - Only EXTRACTED_FROM edges with role="referenced", no role="primary"
+
+        Returns:
+            List of dicts with id, name, confidence, referenced_by (list of doc titles).
+        """
+        return self.execute_cypher(
+            """
+            MATCH (e:Entity)-[r:EXTRACTED_FROM]->(d:Document)
+            WITH e, collect({role: r.role, doc: d.title}) as provenance
+            WHERE ALL(p IN provenance WHERE p.role = 'referenced')
+            RETURN e.id as id, e.name as name, e.confidence as confidence,
+                   [p IN provenance | p.doc] as referenced_by
+            ORDER BY e.name
+            """
+        )
+
+    def get_entity_completeness(self) -> list[dict]:
+        """Get completeness status for all entities.
+
+        Returns entities with their provenance status:
+        - "complete": Has a primary document
+        - "stub": Only referenced, no primary document
+        - "orphan": No EXTRACTED_FROM edges at all
+
+        Returns:
+            List of dicts with id, name, confidence, status, primary_doc, referenced_by.
+        """
+        return self.execute_cypher(
+            """
+            MATCH (e:Entity)
+            OPTIONAL MATCH (e)-[r:EXTRACTED_FROM]->(d:Document)
+            WITH e,
+                 collect(CASE WHEN r.role = 'primary' THEN d.title END) as primary_docs,
+                 collect(CASE WHEN r.role = 'referenced' THEN d.title END) as ref_docs
+            RETURN e.id as id,
+                   e.name as name,
+                   e.confidence as confidence,
+                   CASE
+                       WHEN size([p IN primary_docs WHERE p IS NOT NULL]) > 0 THEN 'complete'
+                       WHEN size([r IN ref_docs WHERE r IS NOT NULL]) > 0 THEN 'stub'
+                       ELSE 'orphan'
+                   END as status,
+                   [p IN primary_docs WHERE p IS NOT NULL] as primary_docs,
+                   [r IN ref_docs WHERE r IS NOT NULL] as referenced_by
+            ORDER BY status, e.name
+            """
+        )
+
     # === Utility ===
 
     def delete_by_source_doc(self, source_doc_id: str) -> None:
