@@ -105,6 +105,7 @@ signal.signal(signal.SIGTERM, _signal_handler)
 async def kdd_search(
     query: str,
     limit: int = 5,
+    mode: str = "vector",
     chunk_types: list[str] | None = None,
     domains: list[str] | None = None,
     tags: list[str] | None = None,
@@ -118,14 +119,23 @@ async def kdd_search(
     Args:
         query: Natural language search query.
         limit: Maximum number of results (default 5).
+        mode: Retrieval mode - "vector" (semantic), "graph" (knowledge graph), or "hybrid" (both).
         chunk_types: Filter by chunk types (e.g. ["header", "paragraph"]).
         domains: Filter by document domains.
         tags: Filter by document tags.
         score_threshold: Minimum relevance score (0.0-1.0).
     """
-    from kb_engine.core.models.search import SearchFilters
+    from kb_engine.core.models.search import RetrievalMode, SearchFilters
 
     retrieval, _, _ = await _get_services()
+
+    # Map mode string to enum
+    mode_map = {
+        "vector": RetrievalMode.VECTOR,
+        "graph": RetrievalMode.GRAPH,
+        "hybrid": RetrievalMode.HYBRID,
+    }
+    retrieval_mode = mode_map.get(mode.lower(), RetrievalMode.VECTOR)
 
     filters = None
     if chunk_types or domains or tags:
@@ -137,6 +147,7 @@ async def kdd_search(
 
     response = await retrieval.search(
         query=query,
+        mode=retrieval_mode,
         limit=limit,
         filters=filters,
         score_threshold=score_threshold,
@@ -144,7 +155,7 @@ async def kdd_search(
 
     results = []
     for ref in response.references:
-        results.append({
+        result = {
             "url": ref.url,
             "title": ref.title,
             "section": ref.section_title,
@@ -152,10 +163,20 @@ async def kdd_search(
             "snippet": ref.snippet[:200] if ref.snippet else "",
             "type": ref.chunk_type,
             "domain": ref.domain,
-        })
+            "retrieval_mode": ref.retrieval_mode.value,
+        }
+        # Include graph metadata if present
+        if ref.metadata.get("graph_relationships"):
+            result["graph"] = {
+                "node_name": ref.metadata.get("graph_node_name"),
+                "node_type": ref.metadata.get("graph_node_type"),
+                "relationships": ref.metadata.get("graph_relationships"),
+            }
+        results.append(result)
 
     return json.dumps({
         "query": response.query,
+        "mode": retrieval_mode.value,
         "total": response.total_count,
         "results": results,
     })
@@ -291,9 +312,10 @@ def mcp_cli() -> None:
 @mcp_cli.command("search")
 @click.argument("query")
 @click.option("--limit", "-l", default=5, help="Max results")
-def cli_search(query: str, limit: int) -> None:
+@click.option("--mode", "-m", type=click.Choice(["vector", "graph", "hybrid"]), default="vector", help="Retrieval mode")
+def cli_search(query: str, limit: int, mode: str) -> None:
     """Search the knowledge base."""
-    result = asyncio.run(kdd_search(query=query, limit=limit))
+    result = asyncio.run(kdd_search(query=query, limit=limit, mode=mode))
     data = json.loads(result)
     click.echo(json.dumps(data, indent=2))
 

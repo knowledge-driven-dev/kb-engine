@@ -176,7 +176,7 @@ class TestKddSearch:
         data = json.loads(result)
         item = data["results"][0]
 
-        expected_keys = {"url", "title", "section", "score", "snippet", "type", "domain"}
+        expected_keys = {"url", "title", "section", "score", "snippet", "type", "domain", "retrieval_mode"}
         assert set(item.keys()) == expected_keys
         assert item["section"] == "Introduction"
         assert item["type"] == "paragraph"
