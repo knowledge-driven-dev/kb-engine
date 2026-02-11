@@ -150,7 +150,7 @@ class IndexationPipeline:
         """Reindex an existing document."""
         await self._vector.delete_by_document(document.id)
         if self._graph_strategy is not None:
-            await self._graph_strategy.delete_by_document(str(document.id))
+            await self._graph_strategy.delete_by_document(document.relative_path or str(document.id))
         await self._traceability.delete_chunks_by_document(document.id)
         return await self.index_document(document)
 
@@ -158,7 +158,7 @@ class IndexationPipeline:
         """Delete a document and all its indexed data."""
         await self._vector.delete_by_document(document.id)
         if self._graph_strategy is not None:
-            await self._graph_strategy.delete_by_document(str(document.id))
+            await self._graph_strategy.delete_by_document(document.relative_path or str(document.id))
         await self._traceability.delete_chunks_by_document(document.id)
         return await self._traceability.delete_document(document.id)
 

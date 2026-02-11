@@ -561,15 +561,31 @@ class FalkorDBGraphStore:
     def get_document_impact(self, doc_id: str) -> list[dict]:
         """Get all nodes extracted from a given document.
 
+        Looks up by document id first, then falls back to matching
+        by path suffix (ENDS WITH) so both 'specs/foo.md' and
+        '/specs/foo.md' resolve correctly.
+
         Args:
-            doc_id: Document identifier.
+            doc_id: Document identifier or file path.
 
         Returns:
             List of dicts with node_type, id, name, role, confidence.
         """
-        return self.execute_cypher(
+        results = self.execute_cypher(
             """
             MATCH (n)-[r:EXTRACTED_FROM]->(d:Document {id: $did})
+            RETURN labels(n)[0] as node_type, n.id as id, n.name as name,
+                   r.role as role, r.confidence as confidence
+            """,
+            {"did": doc_id},
+        )
+        if results:
+            return results
+        # Fallback: search by path suffix
+        return self.execute_cypher(
+            """
+            MATCH (n)-[r:EXTRACTED_FROM]->(d:Document)
+            WHERE d.id ENDS WITH $did OR d.path ENDS WITH $did
             RETURN labels(n)[0] as node_type, n.id as id, n.name as name,
                    r.role as role, r.confidence as confidence
             """,

@@ -67,7 +67,7 @@ class SmartGraphExtractionStrategy:
             entity_info = parser.extract_entity_info(parsed)
 
             # Override source doc id and propagate path for provenance
-            doc_id = str(document.id)
+            doc_id = document.relative_path or str(document.id)
             parsed.frontmatter["id"] = doc_id
             parsed.frontmatter["path"] = document.relative_path or document.source_path or ""
 
@@ -83,7 +83,7 @@ class SmartGraphExtractionStrategy:
             return GraphExtractionResult(nodes_created=nodes, edges_created=edges)
 
         # Non-entity document: create Document node + basic Entity node + EXTRACTED_FROM
-        doc_id = str(document.id)
+        doc_id = document.relative_path or str(document.id)
         doc_path = document.relative_path or document.source_path or ""
         doc_kind = detection.kind.value
 
