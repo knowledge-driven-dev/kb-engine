@@ -40,7 +40,7 @@ class GitRepoScanner:
         try:
             self._run_git("rev-parse", "--git-dir")
             return True
-        except (subprocess.CalledProcessError, FileNotFoundError):
+        except (subprocess.CalledProcessError, FileNotFoundError, NotADirectoryError):
             return False
 
     def get_current_commit(self) -> str:

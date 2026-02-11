@@ -84,6 +84,8 @@ def index(repo_path: str, name: str | None, pattern: tuple[str, ...], exclude: t
     if not repo_path_obj.exists():
         click.echo(f"Error: Path does not exist: {repo_path_obj}", err=True)
         sys.exit(1)
+    if repo_path_obj.is_file():
+        repo_path_obj = repo_path_obj.parent
 
     repo_name = name or repo_path_obj.name
 
