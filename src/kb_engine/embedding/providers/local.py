@@ -19,7 +19,7 @@ class LocalEmbeddingProvider(EmbeddingProvider):
     def __init__(
         self,
         model_path: str | None = None,
-        model_name: str = "all-MiniLM-L6-v2",
+        model_name: str = "all-mpnet-base-v2",
     ) -> None:
         self._model_path = model_path
         self._model_name_str = model_name

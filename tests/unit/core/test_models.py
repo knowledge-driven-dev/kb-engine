@@ -174,17 +174,17 @@ class TestEmbedding:
     def test_create_embedding(self) -> None:
         chunk_id = uuid4()
         doc_id = uuid4()
-        vector = [0.1] * 384
+        vector = [0.1] * 768
 
         embedding = Embedding(
             chunk_id=chunk_id,
             document_id=doc_id,
             vector=vector,
-            model="all-MiniLM-L6-v2",
-            dimensions=384,
+            model="all-mpnet-base-v2",
+            dimensions=768,
         )
         assert embedding.chunk_id == chunk_id
-        assert len(embedding.vector) == 384
+        assert len(embedding.vector) == 768
 
     def test_embedding_payload(self) -> None:
         chunk_id = uuid4()

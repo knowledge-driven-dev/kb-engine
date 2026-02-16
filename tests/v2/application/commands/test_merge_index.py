@@ -20,7 +20,7 @@ from kdd.infrastructure.artifact.filesystem import FilesystemArtifactStore
 def _make_manifest(
     *,
     version: str = "1.0.0",
-    embedding_model: str | None = "all-MiniLM-L6-v2",
+    embedding_model: str | None = "all-mpnet-base-v2",
     index_level: IndexLevel = IndexLevel.L1,
     nodes: int = 1,
     edges: int = 1,

@@ -10,7 +10,7 @@ from __future__ import annotations
 class SentenceTransformerModel:
     """Local embedding model using sentence-transformers."""
 
-    def __init__(self, model_name: str = "all-MiniLM-L6-v2") -> None:
+    def __init__(self, model_name: str = "all-mpnet-base-v2") -> None:
         from sentence_transformers import SentenceTransformer
 
         self._model = SentenceTransformer(model_name)

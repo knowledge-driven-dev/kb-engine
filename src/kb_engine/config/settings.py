@@ -68,7 +68,7 @@ class Settings(BaseSettings):
 
     # --- Embeddings (independent of profile) ---
     embedding_provider: str = "local"  # "local" | "openai"
-    local_embedding_model: str = "paraphrase-multilingual-MiniLM-L12-v2"
+    local_embedding_model: str = "all-mpnet-base-v2"
 
     # OpenAI
     openai_api_key: str | None = None

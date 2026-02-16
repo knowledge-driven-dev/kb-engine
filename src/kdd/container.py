@@ -77,7 +77,7 @@ def create_container(
             )
             from kdd.infrastructure.vector.hnswlib_store import HNSWLibVectorStore
 
-            model_name = embedding_model_name or "all-MiniLM-L6-v2"
+            model_name = embedding_model_name or "all-mpnet-base-v2"
             embedding_model = SentenceTransformerModel(model_name)
             vector_store = HNSWLibVectorStore()
             logger.info("L2 available: embedding model '%s' loaded", model_name)
