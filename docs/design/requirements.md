@@ -1,11 +1,11 @@
-# Requisitos - Sistema RAG Híbrido
+# Requisitos - Sistema de Retrieval de Conocimiento
 
 ## 1. Contexto y Alcance
 
 | Aspecto | Descripción |
 |---------|-------------|
 | **Dominio** | Desarrollo de código |
-| **Fuentes** | Documentación (Markdown) + código fuente |
+| **Fuentes** | Documentación (Markdown, JSON, YAML, RST) + código fuente |
 | **Consumidor** | Sistemas de desarrollo vía MCP (fuera de alcance inicial) |
 | **Foco actual** | Backend |
 
@@ -13,39 +13,38 @@
 
 ### 2.1 Motores de Almacenamiento
 
-| Motor | Propósito | Implementaciones |
-|-------|-----------|------------------|
-| **Trazabilidad** | Lineage, metadatos, relaciones documento→chunk→embedding→nodo | PostgreSQL |
-| **Vectorial** | Búsqueda semántica (embeddings) | Qdrant, Weaviate, pgvector |
-| **Grafos** | Modelo de conocimiento multicapa (entidades KDD) | Neo4j, NebulaGraph |
+| Motor | Propósito | Perfil Local | Perfil Server |
+|-------|-----------|--------------|---------------|
+| **Trazabilidad** | Lineage, metadatos, relaciones documento→chunk→embedding→nodo | SQLite | PostgreSQL |
+| **Vectorial** | Búsqueda semántica (embeddings) | ChromaDB | Qdrant |
+| **Grafos** | Modelo de conocimiento (entidades KDD) — opcional | SQLite | Neo4j |
 
-> **Decisión**: Se mantienen las 3 BBDD separadas para no limitar la elección de motor vectorial o de grafos.
+> **Decisión**: Se mantienen las 3 BBDD separadas (ver ADR-0001). El almacenamiento de grafos puede desactivarse con `graph_store="none"`.
 
 ### 2.2 Separación de Procesos
 
 El sistema separa dos procesos principales que comparten las bases de datos:
 
 - **Indexación**: Ingesta, procesamiento y almacenamiento de conocimiento
-- **Inferencia**: Consulta y recuperación de información
+- **Retrieval**: Búsqueda y recuperación de referencias a documentos
 
 ### 2.3 Stack Tecnológico
 
 | Componente | Tecnología |
 |------------|------------|
-| **Backend** | Python |
-| **Framework RAG** | LlamaIndex |
+| **Backend** | Python 3.11+ |
+| **Framework API** | FastAPI |
+| **Abstracciones** | Repository Pattern con Factory (ADR-0001) |
 | **Cloud** | Agnóstico |
 
-El diseño debe ser agnóstico en bases de datos, con abstracciones sobre implementaciones concretas:
+### 2.4 Perfiles de Configuración
 
-**Bases de datos de grafos soportadas:**
-- Neo4j
-- NebulaGraph
+| Perfil | Trazabilidad | Vectorial | Grafos | Embeddings |
+|--------|-------------|-----------|--------|------------|
+| **local** (desarrollo) | SQLite | ChromaDB | SQLite | sentence-transformers (all-MiniLM-L6-v2) |
+| **server** (producción) | PostgreSQL | Qdrant | Neo4j | OpenAI (text-embedding-3-small) |
 
-**Bases de datos vectoriales soportadas:**
-- Qdrant
-- Weaviate
-- pgvector
+El diseño es agnóstico en bases de datos gracias al Repository Pattern, con abstracciones sobre implementaciones concretas.
 
 ## 3. Modelo de Grafos
 
@@ -62,42 +61,42 @@ El diseño debe ser agnóstico en bases de datos, con abstracciones sobre implem
 - **Origen de entidades**: Extraídas de documentación KDD
 - **Metodología base**: Knowledge-Driven Development (KDD) - ver `docs/design/kdd.md`
 
-### 3.3 Tipos de Nodos (Fase 1 - Capa Funcional)
+### 3.3 Tipos de Nodos (Implementados)
 
-Basados en la metodología KDD:
+Definidos en `kb_engine.core.models.graph.NodeType`:
 
 | Categoría | Tipo de Nodo | Descripción |
 |-----------|--------------|-------------|
-| **Visión** | `PRD` | Product Requirement Document por epic |
-| **Dominio** | `Entity` | Entidades y value objects del dominio |
-| **Dominio** | `Event` | Eventos de dominio (EVT-*) |
-| **Dominio** | `Rule` | Reglas de negocio (RUL-*) |
-| **Comportamiento** | `UseCase` | Casos de uso (UC-*) |
-| **Comportamiento** | `Process` | Procesos/flujos (PRC-*) |
-| **Comportamiento** | `Story` | Historias de usuario |
-| **Comportamiento** | `Requirement` | Requisitos funcionales (REQ-*) |
-| **Interfaces** | `API` | Contratos OpenAPI |
-| **Interfaces** | `AsyncAPI` | Contratos de eventos async |
-| **Interfaces** | `UIContract` | Contratos de UI |
-| **Calidad** | `NFR` | Requisitos no funcionales |
-| **Calidad** | `ADR` | Decisiones arquitectónicas |
-| **Calidad** | `Scenario` | Escenarios SBE (I/O) |
-| **Calidad** | `Gherkin` | Features/scenarios ejecutables |
+| **Dominio** | `ENTITY` | Entidades y value objects del dominio |
+| **Dominio** | `RULE` | Reglas de negocio |
+| **Comportamiento** | `USE_CASE` | Casos de uso |
+| **Comportamiento** | `PROCESS` | Procesos/flujos |
+| **Actores** | `ACTOR` | Actores del sistema (usuarios, roles) |
+| **Actores** | `SYSTEM` | Sistemas o servicios |
+| **General** | `CONCEPT` | Conceptos genéricos |
+| **Estructural** | `DOCUMENT` | Referencia a documento fuente |
+| **Estructural** | `CHUNK` | Referencia a chunk fuente |
 
 ### 3.4 Tipos de Relaciones
 
-| Relación | Origen | Destino | Descripción |
-|----------|--------|---------|-------------|
-| `RELATES_TO` | PRD | UseCase, NFR, API | PRD referencia artefactos |
-| `INVOKES` | UseCase | Rule | Caso de uso invoca reglas |
-| `PRODUCES` | UseCase | Event | Caso de uso produce eventos |
-| `RELATES_TO` | UseCase | Story | UC relacionado con historias |
-| `EMITS` | Entity | Event | Entidad emite eventos |
-| `CONSUMES` | Entity | Event | Entidad consume eventos |
-| `HAS_STATE` | Entity | StateMachine | Entidad tiene ciclo de vida |
-| `VALIDATES` | Scenario | UseCase, Rule | Escenario valida UC/regla |
-| `BELONGS_TO` | * | Domain | Pertenencia a dominio/proyecto |
-| `DEPENDS_ON` | * | * | Dependencia genérica |
+Definidos en `kb_engine.core.models.graph.EdgeType`:
+
+| Relación | Categoría | Descripción |
+|----------|-----------|-------------|
+| `CONTAINS` | Estructural | Contención jerárquica |
+| `PART_OF` | Estructural | Pertenencia |
+| `REFERENCES` | Estructural | Referencia genérica |
+| `IMPLEMENTS` | Dominio | Implementación |
+| `DEPENDS_ON` | Dominio | Dependencia |
+| `RELATED_TO` | Dominio | Relación genérica |
+| `TRIGGERS` | Dominio | Disparo de acción |
+| `USES` | Dominio | Uso/consumo |
+| `PRODUCES` | Dominio | Producción |
+| `PERFORMS` | Actor | Actor ejecuta acción |
+| `OWNS` | Actor | Propiedad |
+| `SIMILAR_TO` | Semántico | Similitud semántica |
+| `CONTRADICTS` | Semántico | Contradicción |
+| `EXTENDS` | Semántico | Extensión |
 
 ### 3.5 Propiedades Comunes de Nodos
 
@@ -123,53 +122,45 @@ Trazabilidad total entre todas las piezas del sistema para:
 - Reindexación selectiva o completa de documentos
 - Borrado en cascada cuando se elimina un documento
 
-### 4.2 Ciclo de Vida del Contenido
+### 4.2 Estado de Procesamiento de Documentos
 
-El contenido indexado tiene un ciclo de vida que refleja el estado del desarrollo:
+Los documentos tienen un estado de procesamiento (`DocumentStatus`):
 
 | Estado | Descripción |
 |--------|-------------|
-| `dev` | En desarrollo - funcionalidad definida pero no desplegada |
-| `staging` | Pendiente de despliegue |
-| `pro` | En producción - desplegado y verificable |
-| `deprecated` | Obsoleto - marcado para eliminación |
+| `PENDING` | Documento registrado, pendiente de procesamiento |
+| `PROCESSING` | Pipeline de indexación en curso |
+| `INDEXED` | Indexación completada exitosamente |
+| `FAILED` | Error durante indexación |
+| `ARCHIVED` | Archivado / fuera de uso |
 
-**Características:**
-- El estado se asigna al **documento** en momento de indexación
-- El estado se **propaga** a todos los elementos derivados (chunks, embeddings, nodos)
-- Las **queries de inferencia** filtran por estado según el contexto
-- Cambio de estado se propaga sin reindexación
+> **Nota**: El ciclo de vida del contenido (dev → staging → pro → deprecated) está pendiente de implementación (ver DC-011). Actualmente el sistema gestiona solo el estado de procesamiento.
 
-**Ejemplo de uso:**
-```
-1. Indexar requisito nuevo → state: dev
-2. Todos los derivados heredan state: dev
-3. Query en contexto desarrollo → incluye dev + pro
-4. Query en contexto producción → solo pro
-5. Despliegue → cambiar state a pro → propagar
-```
+### 4.3 Entidades de Trazabilidad (Implementadas)
 
-### 4.3 Entidades de Trazabilidad
+Basadas en los modelos Pydantic en `kb_engine.core.models`:
 
 ```
 ┌──────────────────┐
 │     Document     │
 │──────────────────│
 │ id (uuid)        │
-│ external_ref     │  ← ruta en repo (ej: /specs/domain/entities/User.md)
-│ source_type      │  ← 'repository' | 'upload'
-│ kind             │  ← tipo KDD (entity, rule, use_case...)
+│ external_id      │  ← repo_name:relative_path
+│ title            │
+│ content          │
+│ source_path      │
+│ mime_type         │  ← text/markdown, application/json, etc.
 │ domain           │  ← proyecto/dominio
-│ lifecycle_state  │  ← dev | staging | pro | deprecated
-│ status           │
-│ hash             │  ← para detectar cambios en contenido
+│ tags             │  ← etiquetas del frontmatter
+│ metadata (dict)  │  ← info del frontmatter + _parser
+│ status           │  ← PENDING | PROCESSING | INDEXED | FAILED | ARCHIVED
+│ content_hash     │  ← SHA256 para detectar cambios
 │ ──── Git ─────── │
-│ git_repo         │  ← URL o identificador del repositorio
-│ git_ref          │  ← ref indexada (branch, tag, commit)
-│ git_commit_sha   │  ← SHA del commit exacto indexado
-│ git_ref_type     │  ← 'branch' | 'tag' | 'commit'
+│ repo_name        │  ← nombre del repositorio
+│ relative_path    │  ← ruta relativa en el repo
+│ git_commit       │  ← SHA del commit indexado
+│ git_remote_url   │  ← URL del remote
 │ ──── Timestamps ─│
-│ indexed_at       │  ← cuándo se indexó esta versión
 │ created_at       │
 │ updated_at       │
 └────────┬─────────┘
@@ -180,11 +171,14 @@ El contenido indexado tiene un ciclo de vida que refleja el estado del desarroll
 │──────────────────│
 │ id (uuid)        │
 │ document_id (fk) │
-│ sequence         │  ← orden dentro del documento
 │ content          │
-│ metadata (jsonb) │  ← info específica del chunk
-│ lifecycle_state  │  ← heredado del documento
-│ hash             │
+│ chunk_type       │  ← ENTITY | USE_CASE | RULE | PROCESS | DEFAULT
+│ heading_path     │  ← jerarquía de headings [H1, H2, H3]
+│ section_anchor   │  ← anchor calculado del heading_path
+│ start_offset     │
+│ end_offset       │
+│ metadata (dict)  │
+│ content_hash     │
 └────────┬─────────┘
          │ 1:1
          ▼
@@ -193,38 +187,28 @@ El contenido indexado tiene un ciclo de vida que refleja el estado del desarroll
 │──────────────────│
 │ id (uuid)        │
 │ chunk_id (fk)    │
-│ vector_db_ref    │  ← ID en la BBDD vectorial
-│ model            │  ← modelo usado para embedding
-│ lifecycle_state  │  ← heredado del chunk
-│ created_at       │
+│ vector           │  ← list[float]
+│ model            │  ← modelo usado (all-MiniLM-L6-v2 o text-embedding-3-small)
+│ dimensions       │
+│ metadata (dict)  │
 └──────────────────┘
 
-┌──────────────────┐
-│   GraphNode      │
-│──────────────────│
-│ id (uuid)        │
-│ document_id (fk) │  ← documento origen
-│ chunk_id (fk)    │  ← chunk origen (opcional)
-│ graph_db_ref     │  ← ID en la BBDD de grafos
-│ node_type        │  ← tipo de nodo KDD
-│ lifecycle_state  │  ← heredado del documento
-│ status           │  ← draft | validated | approved
-│ created_at       │
-└──────────────────┘
-
-┌──────────────────┐
-│   GraphEdge      │
-│──────────────────│
-│ id (uuid)        │
-│ document_id (fk) │  ← documento origen
-│ graph_db_ref     │  ← ID en la BBDD de grafos
-│ edge_type        │  ← tipo de relación
-│ source_node_id   │
-│ target_node_id   │
-│ lifecycle_state  │  ← heredado del documento
-│ status           │
-│ created_at       │
-└──────────────────┘
+┌──────────────────┐      ┌──────────────────┐
+│      Node        │      │      Edge        │
+│──────────────────│      │──────────────────│
+│ id (uuid)        │      │ id (uuid)        │
+│ external_id      │      │ source_id (fk)   │
+│ name             │      │ target_id (fk)   │
+│ node_type        │      │ edge_type        │
+│ description      │      │ name             │
+│ source_doc_id    │      │ properties       │
+│ source_chunk_id  │      │ weight           │
+│ properties       │      │ source_doc_id    │
+│ confidence       │      │ source_chunk_id  │
+│ extraction_method│      │ confidence       │
+│ created_at       │      │ extraction_method│
+│ updated_at       │      │ created_at       │
+└──────────────────┘      └──────────────────┘
 ```
 
 ### 4.4 Operaciones de Trazabilidad
@@ -286,35 +270,29 @@ Basados en la estructura KDD:
                    └─────────────┘    └─────────────┘    └─────────────┘
 ```
 
-### 5.4 Extracción de Entidades
+### 5.4 Extracción de Entidades (ADR-0003)
 
-El pipeline incluye un paso de extracción de entidades y relaciones:
+Pipeline multi-estrategia implementado en `kb_engine.extraction`:
 
-- **Estrategias configurables**:
-  - Modelos eficientes (spaCy)
-  - Modelos avanzados (LLM externos)
-- **Validación humana**: Requerida para curación
-- **Futuro rol**: Knowledge Manager / Knowledge Owner
+- **FrontmatterExtractor**: Extrae del YAML frontmatter (confidence=1.0)
+- **PatternExtractor**: Detecta patrones en contenido: wiki links `[[Entity]]`, IDs KDD `UC-*`, `RUL-*` (confidence=0.8-0.9)
+- **LLMExtractor**: Extracción semántica con OpenAI (confidence=0.7) — **opcional**, desactivado por defecto
+- **Deduplicación** automática por ID y (source, target, type)
+- El grafo es **opcional**: si `graph_store="none"`, la extracción se omite
 
-## 6. Pipeline de Inferencia (Retrieval)
+## 6. Pipeline de Retrieval
 
-### 6.1 Estrategia Híbrida Principal
+### 6.1 Arquitectura
 
-```
-Grafo (expansión de contexto) → Vector (búsqueda semántica)
-```
+El `RetrievalPipeline` retorna `DocumentReference` con URLs (file:// o https://#anchor) en lugar de contenido raw. Esto permite a agentes externos leer los documentos fuente directamente.
 
-### 6.2 Algoritmos de Recuperación
+### 6.2 Modos de Retrieval (Implementados)
 
-- **Estrategia por defecto**: Inspirada en papers de referencia
-- Múltiples estrategias disponibles y configurables
-- **Selección automática**: Algoritmo (LLM pequeño) detecta tipo de conversación y selecciona estrategia óptima
-- Tipos por definir:
-  - [ ] Solo vector (semántico puro)
-  - [ ] Solo grafo (traversal)
-  - [ ] Híbrido (grafo + vector)
-  - [ ] Keyword/BM25
-  - [ ] Otros
+| Modo | Descripción | Estado |
+|------|-------------|--------|
+| `VECTOR` | Búsqueda semántica por similitud de embeddings | Implementado |
+| `GRAPH` | Búsqueda por traversal del grafo | Placeholder |
+| `HYBRID` | Combina vector + graph con Reciprocal Rank Fusion | Implementado (merge) |
 
 ### 6.3 Requisitos de Rendimiento
 
@@ -355,15 +333,17 @@ Por definir
 
 ## 10. Requisitos Pendientes de Definir
 
-- [x] ~~Tipos de nodos y relaciones del grafo~~ (basado en KDD)
+- [x] ~~Tipos de nodos y relaciones del grafo~~ (implementados en `graph.py`)
 - [x] ~~Tipos específicos de documentos y sus pipelines~~ (basado en KDD)
-- [x] ~~Ciclo de vida del contenido~~ (dev, staging, pro, deprecated)
-- [ ] Modelo de API del backend
-- [ ] Papers de referencia para estrategia de retrieval por defecto
-- [ ] Detalle de algoritmos de retrieval a implementar
-- [ ] Diseño de UI de curación
-- [ ] Modelo de integración con IdP
+- [x] ~~Repository Pattern para abstracción de almacenamiento~~ (ADR-0001)
+- [x] ~~Estrategia de chunking semántico~~ (ADR-0002)
+- [x] ~~Pipeline de extracción multi-estrategia~~ (ADR-0003)
+- [ ] Ciclo de vida del contenido (DC-011)
+- [ ] Modelo de API del backend (DC-006)
+- [ ] Papers de referencia para estrategia de retrieval por defecto (DC-002)
+- [ ] Diseño de UI de curación (DC-007)
+- [ ] Modelo de integración con IdP (DC-005)
 
 ---
 
-*Documento en evolución - Última actualización: Sesión de requisitos inicial*
+*Documento en evolución - Última actualización: Febrero 2026 (alineado con v0.2.0)*

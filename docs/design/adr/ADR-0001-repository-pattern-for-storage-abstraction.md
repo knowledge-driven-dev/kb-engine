@@ -14,10 +14,10 @@ superseded_by: null
 
 ## Contexto
 
-El sistema RAG híbrido requiere trabajar con tres bases de datos diferentes:
-- **PostgreSQL**: Trazabilidad y metadatos
-- **Vector DB**: Embeddings (Qdrant, Weaviate, pgvector)
-- **Graph DB**: Grafo de conocimiento (Neo4j, NebulaGraph)
+El sistema de retrieval requiere trabajar con tres bases de datos diferentes:
+- **Trazabilidad**: Metadatos y lineage (SQLite local / PostgreSQL server)
+- **Vector DB**: Embeddings (ChromaDB local / Qdrant server)
+- **Graph DB**: Grafo de conocimiento (SQLite local / Neo4j server) — opcional
 
 Necesitamos una capa de abstracción que permita:
 1. Cambiar de motor sin modificar lógica de negocio
@@ -25,9 +25,9 @@ Necesitamos una capa de abstracción que permita:
 3. Mantener el código desacoplado de implementaciones específicas
 
 Se evaluaron 4 opciones:
-- Usar abstracciones de LlamaIndex directamente
+- Usar abstracciones de un framework directamente
 - Ports & Adapters (Hexagonal Architecture)
-- Híbrido (LlamaIndex + extensiones)
+- Híbrido (framework + extensiones)
 - Repository Pattern con Factory
 
 ## Decisión
@@ -215,40 +215,47 @@ class RepositoryFactory:
 
     @staticmethod
     def create_traceability(config: dict) -> TraceabilityRepository:
-        """Crea repositorio de trazabilidad (PostgreSQL)."""
-        from .implementations.postgres import PostgresTraceabilityRepository
-        return PostgresTraceabilityRepository(config)
+        """Crea repositorio de trazabilidad."""
+        store_type = config.get("traceability_store", "sqlite")
+
+        if store_type == "sqlite":
+            from .implementations.sqlite import SQLiteRepository
+            return SQLiteRepository(config)
+        elif store_type == "postgres":
+            from .implementations.postgres import PostgresRepository
+            return PostgresRepository(config)
+        else:
+            raise ValueError(f"Traceability store not supported: {store_type}")
 
     @staticmethod
     def create_vector(config: dict) -> VectorRepository:
         """Crea repositorio vectorial según configuración."""
-        vector_type = config.get("vector_db", "qdrant")
+        vector_type = config.get("vector_store", "chroma")
 
-        if vector_type == "qdrant":
-            from .implementations.qdrant import QdrantVectorRepository
-            return QdrantVectorRepository(config)
-        elif vector_type == "weaviate":
-            from .implementations.weaviate import WeaviateVectorRepository
-            return WeaviateVectorRepository(config)
-        elif vector_type == "pgvector":
-            from .implementations.pgvector import PgVectorRepository
-            return PgVectorRepository(config)
+        if vector_type == "chroma":
+            from .implementations.chroma import ChromaRepository
+            return ChromaRepository(config)
+        elif vector_type == "qdrant":
+            from .implementations.qdrant import QdrantRepository
+            return QdrantRepository(config)
         else:
-            raise ValueError(f"Vector DB not supported: {vector_type}")
+            raise ValueError(f"Vector store not supported: {vector_type}")
 
     @staticmethod
-    def create_graph(config: dict) -> GraphRepository:
-        """Crea repositorio de grafos según configuración."""
-        graph_type = config.get("graph_db", "neo4j")
+    def create_graph(config: dict) -> GraphRepository | None:
+        """Crea repositorio de grafos según configuración. Retorna None si desactivado."""
+        graph_type = config.get("graph_store", "sqlite")
 
-        if graph_type == "neo4j":
-            from .implementations.neo4j import Neo4jGraphRepository
-            return Neo4jGraphRepository(config)
-        elif graph_type == "nebula":
-            from .implementations.nebula import NebulaGraphRepository
-            return NebulaGraphRepository(config)
+        if graph_type == "none":
+            return None
+        elif graph_type == "sqlite":
+            from .implementations.sqlite_graph import SQLiteGraphRepository
+            return SQLiteGraphRepository(config)
+        elif graph_type == "neo4j":
+            from .implementations.neo4j import Neo4jRepository
+            return Neo4jRepository(config)
         else:
-            raise ValueError(f"Graph DB not supported: {graph_type}")
+            raise ValueError(f"Graph store not supported: {graph_type}")
 ```
 
 ### Ejemplo de Uso
@@ -297,7 +304,7 @@ class IndexingService:
 
 ## Justificación
 
-1. **Control total**: A diferencia de LlamaIndex, tenemos control completo sobre las interfaces y operaciones específicas que necesitamos (lifecycle, trazabilidad, comunidades).
+1. **Control total**: Tenemos control completo sobre las interfaces y operaciones específicas que necesitamos (lifecycle, trazabilidad, comunidades).
 
 2. **Alineado con DDD**: Las interfaces están definidas en términos del dominio (Document, Chunk, Node) no de tecnología (QdrantClient, Neo4jDriver).
 
@@ -309,14 +316,14 @@ class IndexingService:
 
 ## Alternativas Consideradas
 
-### Alternativa 1: LlamaIndex Puro
+### Alternativa 1: Framework RAG Puro
 
-Usar `VectorStore` y `GraphStore` de LlamaIndex directamente.
+Usar abstracciones de un framework RAG (ej: VectorStore, GraphStore) directamente.
 
 **Descartada porque**:
 - Menos control sobre operaciones específicas (lifecycle, trazabilidad)
-- Dependencia fuerte del roadmap de LlamaIndex
-- Las abstracciones de grafo de LlamaIndex son menos maduras
+- Dependencia fuerte del roadmap del framework
+- Las abstracciones de grafo suelen ser menos maduras
 
 ### Alternativa 2: Ports & Adapters sin Factory
 
@@ -326,9 +333,9 @@ Definir puertos e implementar adaptadores, pero sin factory centralizada.
 - Más código boilerplate para instanciar
 - Menos conveniente para tests y configuración por entorno
 
-### Alternativa 3: Híbrido LlamaIndex + Extensiones
+### Alternativa 3: Híbrido Framework + Extensiones
 
-Usar LlamaIndex donde sea posible, extender con interfaces propias.
+Usar un framework RAG donde sea posible, extender con interfaces propias.
 
 **Descartada porque**:
 - Dos modelos mentales (cuándo usar qué)
@@ -345,7 +352,7 @@ Usar LlamaIndex donde sea posible, extender con interfaces propias.
 
 ### Negativas
 
-- Más código inicial que usar LlamaIndex directamente
+- Más código inicial que usar un framework directamente
 - Debemos mantener las implementaciones de cada adaptador
 - Posible divergencia si los motores tienen capacidades muy diferentes
 
@@ -359,14 +366,16 @@ Usar LlamaIndex donde sea posible, extender con interfaces propias.
 
 ## Plan de Implementación
 
-- [ ] Crear módulo `kb_engine.repositories`
-- [ ] Implementar modelos de dominio (dataclasses)
-- [ ] Definir interfaces (Protocol)
-- [ ] Implementar PostgresTraceabilityRepository
-- [ ] Implementar QdrantVectorRepository (primera opción)
-- [ ] Implementar Neo4jGraphRepository (primera opción)
-- [ ] Crear tests con implementaciones fake
-- [ ] Documentar cómo añadir nuevas implementaciones
+- [x] Crear módulo `kb_engine.repositories`
+- [x] Implementar modelos de dominio (Pydantic BaseModel)
+- [x] Definir interfaces (Protocol)
+- [x] Implementar SQLiteRepository (trazabilidad, perfil local)
+- [x] Implementar ChromaRepository (vectorial, perfil local)
+- [x] Implementar SQLiteGraphRepository (grafos, perfil local)
+- [x] Crear tests con implementaciones SQLite
+- [ ] Implementar PostgresRepository (trazabilidad, perfil server)
+- [ ] Implementar QdrantRepository (vectorial, perfil server)
+- [ ] Implementar Neo4jRepository (grafos, perfil server)
 
 ## Referencias
 

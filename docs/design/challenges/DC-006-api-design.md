@@ -12,14 +12,14 @@ adrs: []
 
 ## 1. Contexto
 
-El backend expone APIs para dos procesos principales: indexación e inferencia. Además, se necesitan APIs para gestión (curación, administración). El diseño debe considerar diferentes clientes: MCP, UI de curación, integraciones externas.
+El backend expone APIs para dos procesos principales: indexación y retrieval. Además, se necesitan APIs para gestión (curación, administración). El diseño debe considerar diferentes clientes: MCP, UI de curación, integraciones externas.
 
 ### Requisitos ya definidos
 
-- **Separación**: Indexación e Inferencia son procesos distintos
+- **Separación**: Indexación y Retrieval son procesos distintos
 - **Clientes**: MCP (principal), UI de curación, APIs directas
 - **Seguridad**: RBAC integrado en todas las APIs
-- **Latencia**: Muy baja para inferencia
+- **Latencia**: Muy baja para retrieval
 
 ### Contexto Técnico
 
@@ -31,7 +31,7 @@ El backend expone APIs para dos procesos principales: indexación e inferencia. 
 
 ### 2.1 Requisitos Funcionales
 
-- [ ] RF1: API de Inferencia (query, retrieval)
+- [ ] RF1: API de Retrieval (search)
 - [ ] RF2: API de Indexación (ingest, reindex, delete)
 - [ ] RF3: API de Curación (validar entidades, aprobar, rechazar)
 - [ ] RF4: API de Administración (configuración, métricas)
@@ -40,7 +40,7 @@ El backend expone APIs para dos procesos principales: indexación e inferencia. 
 
 ### 2.2 Requisitos No Funcionales
 
-- [ ] RNF1: Latencia de inferencia < X ms
+- [ ] RNF1: Latencia de retrieval < X ms
 - [ ] RNF2: Documentación OpenAPI automática
 - [ ] RNF3: Rate limiting por cliente
 - [ ] RNF4: Observabilidad (métricas, traces)
@@ -59,7 +59,7 @@ El backend expone APIs para dos procesos principales: indexación e inferencia. 
 
 ```
 /api/v1/
-├── /query              POST  (inferencia)
+├── /query              POST  (retrieval)
 ├── /documents          CRUD  (indexación)
 ├── /entities           CRUD  (curación)
 ├── /graphs             GET   (exploración)
@@ -80,13 +80,13 @@ El backend expone APIs para dos procesos principales: indexación e inferencia. 
 
 ---
 
-### Opción B: APIs Separadas (Indexación / Inferencia / Admin)
+### Opción B: APIs Separadas (Indexación / Retrieval / Admin)
 
 **Descripción**: Múltiples APIs/servicios especializados.
 
 ```
 Indexing API:     /indexing/v1/documents, /indexing/v1/jobs
-Inference API:    /inference/v1/query, /inference/v1/search
+Retrieval API:    /retrieval/v1/search
 Curation API:     /curation/v1/entities, /curation/v1/validations
 Admin API:        /admin/v1/config, /admin/v1/metrics
 ```
@@ -107,7 +107,7 @@ Admin API:        /admin/v1/config, /admin/v1/metrics
 
 ### Opción C: REST + GraphQL para Consultas
 
-**Descripción**: REST para operaciones CRUD, GraphQL para queries complejas de inferencia.
+**Descripción**: REST para operaciones CRUD, GraphQL para queries complejas de retrieval.
 
 ```
 REST:    /api/v1/documents, /api/v1/entities (CRUD)
@@ -135,7 +135,7 @@ GraphQL: /graphql (queries flexibles, exploración de grafo)
 ```python
 # main.py
 app = FastAPI()
-app.include_router(inference_router, prefix="/api/v1/inference")
+app.include_router(retrieval_router, prefix="/api/v1/retrieval")
 app.include_router(indexing_router, prefix="/api/v1/indexing")
 app.include_router(curation_router, prefix="/api/v1/curation")
 app.include_router(admin_router, prefix="/api/v1/admin")

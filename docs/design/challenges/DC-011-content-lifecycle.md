@@ -16,7 +16,7 @@ El contenido indexado en el sistema tiene un ciclo de vida que refleja el estado
 
 ### Integración con Git
 
-La documentación source está versionada en Git. El sistema RAG debe:
+La documentación source está versionada en Git. El sistema debe:
 - Saber qué versión (commit/tag/branch) de cada documento tiene indexada
 - No necesariamente tener la última versión (por eficiencia, solo cargamos lo necesario)
 - Poder distinguir entre versiones indexadas y versiones disponibles en Git
@@ -27,7 +27,7 @@ La documentación source está versionada en Git. El sistema RAG debe:
 1. Se indexa un nuevo requisito funcional desde branch `develop` con estado `dev`
 2. Se guarda: `git_ref=develop`, `git_commit_sha=abc123`, `lifecycle_state=dev`
 3. Todos los chunks, embeddings y nodos heredan el estado `dev`
-4. Las queries de inferencia en contexto de desarrollo incluyen contenido `dev` + `pro`
+4. Las queries de retrieval en contexto de desarrollo incluyen contenido `dev` + `pro`
 5. Las queries en contexto de producción solo incluyen contenido `pro`
 6. El documento se mergea a `main` y se hace tag `v1.2.0`
 7. Se reindexar desde `main` o tag → `lifecycle_state` pasa a `pro`
@@ -36,7 +36,7 @@ La documentación source está versionada en Git. El sistema RAG debe:
 
 - **Trazabilidad total**: Document → Chunks → Embeddings → Nodes
 - **RBAC**: Filtros de seguridad en queries
-- **Separación indexación/inferencia**: El estado es un filtro más en inferencia
+- **Separación indexación/retrieval**: El estado es un filtro más en retrieval
 - **Git como source**: Documentación versionada en repositorio Git
 
 ## 2. Requisitos y Restricciones
@@ -46,7 +46,7 @@ La documentación source está versionada en Git. El sistema RAG debe:
 - [ ] RF1: Definir estados del ciclo de vida del contenido
 - [ ] RF2: Asignar estado al documento en momento de indexación
 - [ ] RF3: Propagar estado a chunks, embeddings y nodos derivados
-- [ ] RF4: Filtrar por estado en queries de inferencia
+- [ ] RF4: Filtrar por estado en queries de retrieval
 - [ ] RF5: Permitir transiciones de estado (dev → staging → pro)
 - [ ] RF6: Propagar cambios de estado a elementos derivados
 - [ ] RF7: Registrar git_ref, git_commit_sha de cada documento indexado

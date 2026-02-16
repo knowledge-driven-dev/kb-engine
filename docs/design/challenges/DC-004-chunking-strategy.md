@@ -250,7 +250,6 @@ def chunk_hybrid(doc, max_tokens=512, overlap=50):
 
 ## 7. Referencias
 
-- [LlamaIndex Node Parsers](https://docs.llamaindex.ai/en/stable/module_guides/loading/node_parsers/)
 - [Chunking Strategies for RAG](https://www.pinecone.io/learn/chunking-strategies/)
 - [Semantic Chunking](https://python.langchain.com/docs/modules/data_connection/document_transformers/semantic-chunker)
 - [RAPTOR: Recursive Abstractive Processing](https://arxiv.org/abs/2401.18059)

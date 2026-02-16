@@ -9,6 +9,7 @@
 | [ADR-0001](./ADR-0001-repository-pattern-for-storage-abstraction.md) | Repository Pattern para Abstracción de Almacenamiento | `accepted` | 2025-01-16 | DC-010 |
 | [ADR-0002](./ADR-0002-kdd-semantic-chunking-strategy.md) | Estrategia de Chunking Semántico por Tipo KDD | `accepted` | 2025-01-16 | DC-004 |
 | [ADR-0003](./ADR-0003-entity-extraction-pipeline.md) | Pipeline de Extracción de Entidades Multi-estrategia | `accepted` | 2025-01-16 | DC-003 |
+| [ADR-0004](./ADR-0004-mcp-server-agent-integration.md) | MCP Server para Integración con Agentes de IA | `accepted` | 2025-02-07 | DC-012 |
 
 ## Estados
 
@@ -32,9 +33,9 @@ ADR-NNNN-titulo-en-minusculas.md
 
 ### Ejemplos
 
-- `ADR-0001-rbac-with-domain-scopes.md`
-- `ADR-0002-postgresql-for-traceability.md`
-- `ADR-0003-llamaindex-as-rag-framework.md`
+- `ADR-0001-repository-pattern-for-storage-abstraction.md`
+- `ADR-0002-kdd-semantic-chunking-strategy.md`
+- `ADR-0003-entity-extraction-pipeline.md`
 
 ## Proceso
 

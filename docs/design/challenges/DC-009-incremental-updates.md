@@ -221,6 +221,5 @@ async def update_document(doc_id, new_content):
 ## 7. Referencias
 
 - [Vector DB Update Strategies](https://www.pinecone.io/learn/vector-database/)
-- [Incremental Indexing](https://docs.llamaindex.ai/en/stable/module_guides/indexing/index_guide/)
 - [Content-Addressable Storage](https://en.wikipedia.org/wiki/Content-addressable_storage)
 - [Event Sourcing](https://martinfowler.com/eaaDev/EventSourcing.html)

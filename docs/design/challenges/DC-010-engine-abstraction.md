@@ -16,13 +16,13 @@ El sistema debe soportar múltiples implementaciones de bases de datos vectorial
 
 ### Requisitos ya definidos
 
-- **Vector DB**: Qdrant, Weaviate, pgvector
-- **Graph DB**: Neo4j, NebulaGraph
+- **Vector DB**: ChromaDB (local), Qdrant (server)
+- **Graph DB**: SQLite (local), Neo4j (server) — opcional (`graph_store="none"`)
+- **Trazabilidad**: SQLite (local), PostgreSQL (server)
 - **Agnóstico**: El diseño no debe depender de un motor específico
 
 ### Contexto Técnico
 
-- Framework: LlamaIndex (tiene abstracciones propias para vector stores)
 - Cada motor tiene APIs y capacidades diferentes
 - Algunas features pueden no estar disponibles en todos los motores
 
@@ -46,35 +46,26 @@ El sistema debe soportar múltiples implementaciones de bases de datos vectorial
 
 - No todos los motores tienen las mismas capacidades
 - Las queries de grafo pueden variar significativamente (Cypher vs nGQL)
-- LlamaIndex ya tiene abstracciones que podrían aprovecharse
+- Algunos frameworks RAG tienen abstracciones que podrían aprovecharse
 
 ## 3. Opciones Consideradas
 
-### Opción A: Usar Abstracciones de LlamaIndex
+### Opción A: Usar Abstracciones de un Framework RAG
 
-**Descripción**: Aprovechar las interfaces de LlamaIndex para vector stores y graph stores.
+**Descripción**: Aprovechar las interfaces de un framework RAG para vector stores y graph stores.
 
 ```python
-from llama_index.core import VectorStoreIndex
-from llama_index.vector_stores.qdrant import QdrantVectorStore
-from llama_index.vector_stores.weaviate import WeaviateVectorStore
-
-# Configuración por entorno
-if config.vector_db == "qdrant":
-    vector_store = QdrantVectorStore(...)
-elif config.vector_db == "weaviate":
-    vector_store = WeaviateVectorStore(...)
-
+# Ejemplo conceptual con un framework externo
+vector_store = FrameworkVectorStore(...)
 index = VectorStoreIndex.from_vector_store(vector_store)
 ```
 
 **Pros**:
 - Abstracciones ya probadas
 - Menos código custom
-- Actualizaciones de LlamaIndex incluyen mejoras
 
 **Contras**:
-- Dependencia fuerte de LlamaIndex
+- Dependencia fuerte del framework
 - Puede no cubrir todas las operaciones necesarias
 - Menos control sobre optimizaciones
 
@@ -121,15 +112,15 @@ class Neo4jAdapter(GraphStore):
 
 ---
 
-### Opción C: Híbrido (LlamaIndex + Extensiones Propias)
+### Opción C: Híbrido (Framework + Extensiones Propias)
 
-**Descripción**: Usar LlamaIndex donde sea posible, extender con interfaces propias para operaciones no cubiertas.
+**Descripción**: Usar un framework donde sea posible, extender con interfaces propias para operaciones no cubiertas.
 
 ```python
-# Vector: usar LlamaIndex
-from llama_index.vector_stores import QdrantVectorStore
+# Vector: usar framework
+vector_store = FrameworkVectorStore(...)
 
-# Graph: interfaz propia (LlamaIndex graph stores menos maduros)
+# Graph: interfaz propia (abstracciones de grafo menos maduras)
 class GraphStore(Protocol):
     async def create_node(self, node: Node) -> str: ...
     # ...
@@ -140,7 +131,7 @@ class Neo4jGraphStore(GraphStore):
 ```
 
 **Pros**:
-- Aprovecha lo mejor de LlamaIndex
+- Aprovecha lo mejor del framework
 - Control donde se necesita
 - Pragmático
 
@@ -191,19 +182,18 @@ await repo.save_embeddings(doc_id, embeddings)
 
 ## 4. Análisis Comparativo
 
-| Criterio | Peso | LlamaIndex | Ports & Adapters | Híbrido | Repository |
-|----------|------|------------|------------------|---------|------------|
+| Criterio | Peso | Framework | Ports & Adapters | Híbrido | Repository |
+|----------|------|-----------|------------------|---------|------------|
 | Simplicidad inicial | 2 | ⭐⭐⭐ | ⭐ | ⭐⭐ | ⭐⭐ |
 | Control | 2 | ⭐ | ⭐⭐⭐ | ⭐⭐ | ⭐⭐⭐ |
 | Testabilidad | 3 | ⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐ |
 | Mantenibilidad | 3 | ⭐⭐ | ⭐⭐ | ⭐⭐ | ⭐⭐⭐ |
-| Alineación LlamaIndex | 2 | ⭐⭐⭐ | ⭐ | ⭐⭐⭐ | ⭐⭐ |
-| **Total ponderado** | | 26 | 26 | 29 | 32 |
+| Independencia | 2 | ⭐ | ⭐⭐⭐ | ⭐⭐ | ⭐⭐⭐ |
+| **Total ponderado** | | 24 | 26 | 27 | 32 |
 
 ## 5. Preguntas Abiertas
 
-- [ ] ¿Qué operaciones de grafo son críticas? (Cypher es muy diferente a nGQL)
-- [ ] ¿LlamaIndex cubre las operaciones de grafo necesarias?
+- [x] ~~¿Qué operaciones de grafo son críticas?~~ → create_node, create_edge, basic queries
 - [ ] ¿Se necesita soporte para transacciones en grafo?
 - [ ] ¿Cómo manejar features específicas de un motor? (ej: filtros avanzados de Qdrant)
 - [ ] ¿Se prevé añadir más motores en el futuro?
@@ -226,8 +216,8 @@ await repo.save_embeddings(doc_id, embeddings)
 
 ## 7. Referencias
 
-- [LlamaIndex Vector Stores](https://docs.llamaindex.ai/en/stable/module_guides/storing/vector_stores/)
 - [Ports and Adapters (Hexagonal Architecture)](https://alistair.cockburn.us/hexagonal-architecture/)
 - [Repository Pattern](https://martinfowler.com/eaaCatalog/repository.html)
 - [Neo4j Python Driver](https://neo4j.com/docs/python-manual/current/)
 - [Qdrant Python Client](https://qdrant.tech/documentation/quick-start/)
+- [ChromaDB](https://docs.trychroma.com/)

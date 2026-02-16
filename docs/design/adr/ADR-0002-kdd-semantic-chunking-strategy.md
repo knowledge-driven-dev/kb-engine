@@ -58,26 +58,13 @@ class ChunkingConfig:
     embedding_model: str = "text-embedding-3-small"
 
 
-class ChunkType(Enum):
-    """Tipos de chunk para metadatos."""
-    DESCRIPTION = "description"
-    ATTRIBUTES = "attributes"
-    RELATIONS = "relations"
-    LIFECYCLE = "lifecycle"
-    INVARIANTS = "invariants"
-    EVENTS = "events"
-    PRECONDITIONS = "preconditions"
-    POSTCONDITIONS = "postconditions"
-    MAIN_FLOW = "main_flow"
-    EXTENSION = "extension"
-    RULES = "rules"
-    DECISION_TABLE = "decision_table"
-    PROCESS_FLOW = "process_flow"
-    API_ENDPOINT = "api_endpoint"
-    SCHEMA = "schema"
-    SCENARIO = "scenario"
-    FULL_SECTION = "full_section"
-    SUBDIVISION = "subdivision"
+class ChunkType(str, Enum):
+    """Tipos de chunk semánticos — implementados en kb_engine.core.models.document."""
+    ENTITY = "entity"
+    USE_CASE = "use_case"
+    RULE = "rule"
+    PROCESS = "process"
+    DEFAULT = "default"
 
 
 @dataclass
@@ -610,11 +597,8 @@ stateDiagram-v2
 chunker = ChunkerFactory.get_chunker(entity_doc.kind, config)
 chunks = chunker.chunk(entity_doc)
 
-# Resultado: 4 chunks semánticos
-# - Chunk 0: Descripción (type=DESCRIPTION)
-# - Chunk 1: Atributos (type=ATTRIBUTES)
-# - Chunk 2: Relaciones (type=RELATIONS)
-# - Chunk 3: Ciclo de Vida (type=LIFECYCLE)
+# Resultado: chunks semánticos con type=ENTITY
+# Cada chunk de un documento Entity recibe chunk_type=ENTITY
 ```
 
 ## Justificación
@@ -682,20 +666,19 @@ Cada sección H2 es un chunk.
 
 ## Plan de Implementación
 
-- [ ] Crear módulo `kb_engine.chunking`
-- [ ] Implementar ChunkingStrategy base con subdivide_if_needed
-- [ ] Implementar EntityChunker
-- [ ] Implementar UseCaseChunker
-- [ ] Implementar RuleChunker
-- [ ] Implementar ProcessChunker
-- [ ] Implementar DefaultChunker
-- [ ] Crear ChunkerFactory
-- [ ] Tests unitarios por chunker
-- [ ] Integrar con pipeline de indexación
+- [x] Crear módulo `kb_engine.chunking`
+- [x] Implementar ChunkingStrategy base
+- [x] Implementar EntityChunkingStrategy
+- [x] Implementar UseCaseChunkingStrategy
+- [x] Implementar RuleChunkingStrategy
+- [x] Implementar ProcessChunkingStrategy
+- [x] Implementar DefaultChunkingStrategy
+- [x] Crear ChunkerFactory
+- [x] Tests unitarios por chunker
+- [x] Integrar con IndexationPipeline
 
 ## Referencias
 
 - [Design Challenge DC-004](../challenges/DC-004-chunking-strategy.md)
 - [GraphRAG TextUnits](https://microsoft.github.io/graphrag/index/default_dataflow/)
-- [LlamaIndex Node Parsers](https://docs.llamaindex.ai/en/stable/module_guides/loading/node_parsers/)
 - [Metodología KDD](../kdd.md)

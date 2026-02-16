@@ -12,7 +12,7 @@ adrs: []
 
 ## 1. Contexto
 
-El sistema RAG híbrido combina búsqueda vectorial (semántica) con búsqueda en grafos (relaciones). La estrategia de retrieval determina cómo se combinan ambos motores para obtener los resultados más relevantes.
+El sistema de retrieval combina búsqueda vectorial (semántica) con búsqueda en grafos (relaciones). La estrategia de retrieval determina cómo se combinan ambos motores para obtener los resultados más relevantes.
 
 ### Requisitos ya definidos
 
@@ -24,10 +24,11 @@ El sistema RAG híbrido combina búsqueda vectorial (semántica) con búsqueda e
 
 ### Contexto Técnico
 
-- Framework: LlamaIndex (Python)
-- Vector DB: Qdrant / Weaviate / pgvector
-- Graph DB: Neo4j / NebulaGraph
+- Backend: Python (FastAPI)
+- Vector DB: ChromaDB (local) / Qdrant (server)
+- Graph DB: SQLite (local) / Neo4j (server) — opcional
 - Modelo de conocimiento: Entidades KDD (Entity, Rule, UseCase, Process, etc.)
+- Pipeline actual: `RetrievalPipeline` con modos VECTOR, GRAPH, HYBRID
 
 ## 2. Requisitos y Restricciones
 
@@ -107,13 +108,13 @@ class StrategyRegistry:
 
 ---
 
-### Opción C: Pipeline Configurable (LlamaIndex-style)
+### Opción C: Pipeline Configurable (composable)
 
 **Descripción**: Definir retrieval como un pipeline de pasos configurables. Cada paso es un componente (retriever, reranker, filter).
 
 ```python
 pipeline = RetrievalPipeline([
-    GraphExpander(depth=2, relations=["RELATES_TO", "INVOKES"]),
+    GraphExpander(depth=2, relations=["RELATED_TO", "IMPLEMENTS"]),
     VectorRetriever(top_k=10),
     SecurityFilter(),
     Reranker(model="cross-encoder"),
@@ -122,7 +123,6 @@ pipeline = RetrievalPipeline([
 
 **Pros**:
 - Muy flexible y composable
-- Alineado con arquitectura LlamaIndex
 - Permite experimentación fácil
 
 **Contras**:
@@ -166,7 +166,7 @@ registry.register("custom_client", custom_pipeline)
 |----------|------|-----------|-------------------|----------|---------|
 | Simplicidad inicial | 2 | ⭐⭐⭐ | ⭐⭐ | ⭐ | ⭐⭐ |
 | Extensibilidad | 3 | ⭐ | ⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐ |
-| Alineación LlamaIndex | 2 | ⭐ | ⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐ |
+| Composabilidad | 2 | ⭐ | ⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐ |
 | Facilidad de configuración | 2 | ⭐⭐⭐ | ⭐⭐ | ⭐ | ⭐⭐ |
 | Rendimiento | 3 | ⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐ | ⭐⭐ |
 | **Total ponderado** | | 26 | 31 | 27 | 30 |
@@ -194,5 +194,4 @@ registry.register("custom_client", custom_pipeline)
 - [GraphRAG (Microsoft)](https://arxiv.org/abs/2404.16130) - Graph-based RAG
 - [RAPTOR](https://arxiv.org/abs/2401.18059) - Recursive Abstractive Processing
 - [HippoRAG](https://arxiv.org/abs/2405.14831) - Neurobiologically inspired RAG
-- [LlamaIndex Query Pipelines](https://docs.llamaindex.ai/en/stable/module_guides/querying/pipeline/)
 - [Hybrid Search patterns](https://www.pinecone.io/learn/hybrid-search/)

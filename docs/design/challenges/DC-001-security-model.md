@@ -12,7 +12,7 @@ adrs: []
 
 ## 1. Contexto
 
-El sistema RAG híbrido maneja documentación sensible de proyectos de desarrollo. Es crítico implementar un modelo de seguridad **by design** que controle el acceso a:
+El sistema de retrieval maneja documentación sensible de proyectos de desarrollo. Es crítico implementar un modelo de seguridad **by design** que controle el acceso a:
 
 - Documentos (fuente original)
 - Chunks (fragmentos indexados)
@@ -41,7 +41,7 @@ El control de acceso debe aplicarse a nivel de **documento** y **proyecto/domini
 
 ### 2.2 Requisitos No Funcionales
 
-- [ ] RNF1: La verificación de permisos no debe impactar significativamente la latencia de inferencia
+- [ ] RNF1: La verificación de permisos no debe impactar significativamente la latencia de retrieval
 - [ ] RNF2: El modelo debe ser auditable (quién accedió a qué, cuándo)
 - [ ] RNF3: Debe soportar cambios de permisos sin reindexación
 

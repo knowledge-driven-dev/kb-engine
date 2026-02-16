@@ -45,39 +45,39 @@ import yaml
 # MODELOS
 # ============================================================
 
-class NodeType(Enum):
-    """Tipos de nodos basados en KDD."""
-    PRD = "prd"
+class NodeType(str, Enum):
+    """Tipos de nodos — implementados en kb_engine.core.models.graph."""
     ENTITY = "entity"
-    EVENT = "event"
-    RULE = "rule"
     USE_CASE = "use_case"
+    RULE = "rule"
     PROCESS = "process"
-    STORY = "story"
-    REQUIREMENT = "requirement"
-    API = "api"
-    ASYNC_API = "async_api"
-    UI_CONTRACT = "ui_contract"
-    NFR = "nfr"
-    ADR = "adr"
-    SCENARIO = "scenario"
-    GHERKIN = "gherkin"
-    UNKNOWN = "unknown"
+    ACTOR = "actor"
+    SYSTEM = "system"
+    CONCEPT = "concept"
+    DOCUMENT = "document"
+    CHUNK = "chunk"
 
 
-class EdgeType(Enum):
-    """Tipos de relaciones basados en KDD."""
-    RELATES_TO = "RELATES_TO"
-    INVOKES = "INVOKES"
-    PRODUCES = "PRODUCES"
-    CONSUMES = "CONSUMES"
-    EMITS = "EMITS"
-    VALIDATES = "VALIDATES"
+class EdgeType(str, Enum):
+    """Tipos de relaciones — implementados en kb_engine.core.models.graph."""
+    # Structural
+    CONTAINS = "CONTAINS"
+    PART_OF = "PART_OF"
+    REFERENCES = "REFERENCES"
+    # Domain
     IMPLEMENTS = "IMPLEMENTS"
     DEPENDS_ON = "DEPENDS_ON"
-    BELONGS_TO = "BELONGS_TO"
-    HAS_STATE = "HAS_STATE"
-    MENTIONS = "MENTIONS"  # Para referencias implícitas
+    RELATED_TO = "RELATED_TO"
+    TRIGGERS = "TRIGGERS"
+    USES = "USES"
+    PRODUCES = "PRODUCES"
+    # Actor
+    PERFORMS = "PERFORMS"
+    OWNS = "OWNS"
+    # Semantic
+    SIMILAR_TO = "SIMILAR_TO"
+    CONTRADICTS = "CONTRADICTS"
+    EXTENDS = "EXTENDS"
 
 
 @dataclass
@@ -144,34 +144,19 @@ class FrontmatterExtractor(Extractor):
 
     # Mapeo de kind KDD a NodeType
     KIND_TO_NODE_TYPE = {
-        "prd": NodeType.PRD,
         "entity": NodeType.ENTITY,
-        "event": NodeType.EVENT,
-        "rule": NodeType.RULE,
         "use_case": NodeType.USE_CASE,
+        "rule": NodeType.RULE,
         "process": NodeType.PROCESS,
-        "story": NodeType.STORY,
-        "requirement": NodeType.REQUIREMENT,
-        "api": NodeType.API,
-        "async_api": NodeType.ASYNC_API,
-        "nfr": NodeType.NFR,
-        "adr": NodeType.ADR,
-        "scenario": NodeType.SCENARIO,
+        # Tipos KDD no mapeados directamente se asignan a CONCEPT
     }
 
-    # Mapeo de campo a tipo de relación
+    # Mapeo de campo frontmatter a tipo de relación
     FIELD_TO_EDGE_TYPE = {
-        "related": EdgeType.RELATES_TO,
-        "invokes": EdgeType.INVOKES,
-        "invokes_rules": EdgeType.INVOKES,
-        "produces": EdgeType.PRODUCES,
-        "produces_events": EdgeType.PRODUCES,
-        "consumes": EdgeType.CONSUMES,
-        "emits": EdgeType.EMITS,
-        "validates": EdgeType.VALIDATES,
+        "related": EdgeType.RELATED_TO,
+        "references": EdgeType.REFERENCES,
         "implements": EdgeType.IMPLEMENTS,
         "depends_on": EdgeType.DEPENDS_ON,
-        "related_stories": EdgeType.RELATES_TO,
     }
 
     def extract(self, document: "Document", content: str) -> ExtractionResult:
@@ -289,19 +274,15 @@ class PatternExtractor(Extractor):
     - IDs KDD: UC-*, RUL-*, PRC-*, EVT-*, ADR-*, PRD-*, REQ-*, STORY-*
     """
 
-    # Patrones de IDs KDD
-    ID_PATTERNS = {
-        r'UC-[\w-]+(?:@v\d+)?': NodeType.USE_CASE,
-        r'RUL-[\w-]+(?:@v\d+)?': NodeType.RULE,
-        r'PRC-[\w-]+(?:@v\d+)?': NodeType.PROCESS,
-        r'EVT-[\w-]+(?:@v\d+)?': NodeType.EVENT,
-        r'ADR-[\w-]+(?:@v\d+)?': NodeType.ADR,
-        r'PRD-[\w-]+(?:@v\d+)?': NodeType.PRD,
-        r'REQ-[\w-]+(?:@v\d+)?': NodeType.REQUIREMENT,
-        r'STORY-[\w-]+': NodeType.STORY,
-        r'NFR-[\w-]+(?:@v\d+)?': NodeType.NFR,
-        r'SCN-[\w-]+(?:@v\d+)?': NodeType.SCENARIO,
-    }
+    # Patrones de entidades en texto (implementados en PatternExtractor)
+    ENTITY_PATTERNS = [
+        # (regex, NodeType, confidence)
+        (r"(?:actor|usuario|user|...)[\s:]+(\w+)", NodeType.ACTOR, 0.8),
+        (r"(?:sistema|system|servicio|...)[\s:]+(\w+)", NodeType.SYSTEM, 0.8),
+        (r"(?:entidad|entity|objeto|...)[\s:]+(\w+)", NodeType.ENTITY, 0.8),
+        (r"(?:caso de uso|use case|CU[-_]?\d+)[\s:]+(\w+)", NodeType.USE_CASE, 0.85),
+        (r"(?:regla|rule|RN[-_]?\d+|BR[-_]?\d+)[\s:]+(\w+)", NodeType.RULE, 0.85),
+    ]
 
     # Patrón para wiki links [[...]]
     WIKI_LINK_PATTERN = r'\[\[([^\]]+)\]\]'
@@ -318,25 +299,14 @@ class PatternExtractor(Extractor):
             result.edges.append(ExtractedEdge(
                 source_node_id=main_node_id,
                 target_node_id=ref,
-                edge_type=EdgeType.MENTIONS,
+                edge_type=EdgeType.REFERENCES,
                 source_document_id=document.id,
                 confidence=0.9,
                 extraction_method="pattern_wiki"
             ))
 
-        # Extraer referencias de IDs KDD
-        id_refs = self._extract_id_references(content, main_node_id)
-        for ref_id, node_type in id_refs:
-            # No crear edge a sí mismo
-            if ref_id != main_node_id:
-                result.edges.append(ExtractedEdge(
-                    source_node_id=main_node_id,
-                    target_node_id=ref_id,
-                    edge_type=EdgeType.MENTIONS,
-                    source_document_id=document.id,
-                    confidence=0.9,
-                    extraction_method="pattern_id"
-                ))
+        # Extraer entidades y relaciones por patrones en texto
+        # (actores, sistemas, dependencias, etc.)
 
         return result
 
@@ -496,20 +466,20 @@ No incluyas las ya declaradas en el front-matter (id, related, invokes, etc.).""
     def _map_type(self, type_str: str) -> NodeType:
         mapping = {
             "entity": NodeType.ENTITY,
-            "service": NodeType.API,
+            "service": NodeType.SYSTEM,
             "data": NodeType.ENTITY,
-            "concept": NodeType.ENTITY,
+            "concept": NodeType.CONCEPT,
         }
-        return mapping.get(type_str, NodeType.UNKNOWN)
+        return mapping.get(type_str, NodeType.CONCEPT)
 
     def _map_relation(self, rel_str: str) -> EdgeType:
         mapping = {
-            "uses": EdgeType.DEPENDS_ON,
-            "contains": EdgeType.RELATES_TO,
+            "uses": EdgeType.USES,
+            "contains": EdgeType.CONTAINS,
             "depends_on": EdgeType.DEPENDS_ON,
-            "relates_to": EdgeType.RELATES_TO,
+            "relates_to": EdgeType.RELATED_TO,
         }
-        return mapping.get(rel_str, EdgeType.RELATES_TO)
+        return mapping.get(rel_str, EdgeType.RELATED_TO)
 
 
 # ============================================================
@@ -682,14 +652,10 @@ result = pipeline.extract(doc)
 # Resultado:
 # Nodes: [UC-Checkout@v1]
 # Edges:
-#   - UC-Checkout@v1 --INVOKES--> RUL-ValidateCart (frontmatter, conf=1.0)
-#   - UC-Checkout@v1 --INVOKES--> RUL-ApplyDiscount (frontmatter, conf=1.0)
-#   - UC-Checkout@v1 --PRODUCES--> EVT-OrderCreated (frontmatter, conf=1.0)
-#   - UC-Checkout@v1 --RELATES_TO--> UC-Payment (frontmatter, conf=1.0)
-#   - UC-Checkout@v1 --MENTIONS--> Carrito (pattern_wiki, conf=0.9)
-#   - UC-Checkout@v1 --MENTIONS--> RUL-ValidateCart (pattern_id, conf=0.9)
-#   - UC-Checkout@v1 --MENTIONS--> RUL-ApplyDiscount (pattern_id, conf=0.9)
-#   - UC-Checkout@v1 --MENTIONS--> UC-Payment (pattern_id, conf=0.9)
+#   - UC-Checkout@v1 --RELATED_TO--> RUL-ValidateCart (frontmatter, conf=1.0)
+#   - UC-Checkout@v1 --RELATED_TO--> RUL-ApplyDiscount (frontmatter, conf=1.0)
+#   - UC-Checkout@v1 --RELATED_TO--> UC-Payment (frontmatter, conf=1.0)
+#   - UC-Checkout@v1 --REFERENCES--> Carrito (pattern_wiki, conf=0.9)
 ```
 
 ## Justificación
@@ -759,15 +725,14 @@ Usar NER de spaCy para detectar entidades.
 
 ## Plan de Implementación
 
-- [ ] Crear módulo `kb_engine.extraction`
-- [ ] Implementar FrontmatterExtractor
-- [ ] Implementar PatternExtractor
-- [ ] Implementar LLMExtractor (opcional)
-- [ ] Implementar ExtractionPipeline con deduplicación
-- [ ] Crear ExtractionPipelineFactory
-- [ ] Tests unitarios por extractor
-- [ ] Tests de integración del pipeline
-- [ ] Integrar con pipeline de indexación
+- [x] Crear módulo `kb_engine.extraction`
+- [x] Implementar FrontmatterExtractor
+- [x] Implementar PatternExtractor
+- [x] Implementar LLMExtractor (opcional, desactivado por defecto)
+- [x] Implementar ExtractionPipeline con deduplicación
+- [x] Crear ExtractionPipelineFactory
+- [x] Tests unitarios por extractor
+- [x] Integrar con IndexationPipeline
 
 ## Referencias
 

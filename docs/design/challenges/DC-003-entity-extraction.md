@@ -267,6 +267,5 @@ class ExtractionPipeline:
 ## 7. Referencias
 
 - [spaCy NER](https://spacy.io/usage/linguistic-features#named-entities)
-- [LlamaIndex Entity Extraction](https://docs.llamaindex.ai/en/stable/examples/metadata_extraction/)
 - [Knowledge Graph Construction with LLMs](https://arxiv.org/abs/2310.04835)
 - [REBEL: Relation Extraction](https://github.com/Babelscape/rebel)
