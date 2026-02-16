@@ -49,6 +49,20 @@ server = [
 mcp = [
     "mcp>=1.0.0",
 ]
+kdd = [
+    "pydantic>=2.5.0",
+    "python-frontmatter>=1.0.0",
+    "click>=8.0",
+    "networkx>=3.0",
+]
+kdd-l2 = [
+    "sentence-transformers>=2.3.0",
+    "hnswlib>=0.8.0",
+]
+kdd-server = [
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+]
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
@@ -64,9 +78,10 @@ dev = [
 kb-engine = "kb_engine.api.main:run"
 kb = "kb_engine.cli:cli"
 kb-mcp = "kb_engine.mcp_server:main"
+kdd = "kdd.api.cli:cli"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/kb_engine"]
+packages = ["src/kb_engine", "src/kdd"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -102,7 +117,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["kb_engine"]
+known-first-party = ["kb_engine", "kdd"]
 
 [tool.mypy]
 python_version = "3.11"
@@ -122,11 +137,13 @@ module = [
     "falkordb.*",
     "redislite.*",
     "mcp.*",
+    "hnswlib.*",
+    "networkx.*",
 ]
 ignore_missing_imports = true
 
 [tool.coverage.run]
-source = ["src/kb_engine"]
+source = ["src/kb_engine", "src/kdd"]
 branch = true
 
 [tool.coverage.report]
