@@ -35,6 +35,7 @@ class ChunkingStrategy(str, Enum):
     KEEP_INTACT = "keep_intact"
     TABLE_ROWS = "table_rows"
     SPLIT_BY_ITEMS = "split_by_items"
+    SPLIT_BY_PARAGRAPHS = "split_by_paragraphs"
 
 
 class ContentExpectation(str, Enum):

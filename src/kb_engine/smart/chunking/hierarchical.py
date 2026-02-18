@@ -111,6 +111,19 @@ class HierarchicalChunker:
                 sequence += 1
                 section_log.debug("chunker.section.keep_intact", content_length=len(section.content))
 
+            elif strategy == ChunkingStrategy.SPLIT_BY_PARAGRAPHS:
+                text_chunks = self._split_by_paragraphs(
+                    text=section.content,
+                    context=context,
+                    doc_id=doc_id,
+                    doc_kind=parsed.kind,
+                    section_name=section.name,
+                    start_sequence=sequence,
+                )
+                chunks.extend(text_chunks)
+                sequence += len(text_chunks)
+                section_log.debug("chunker.section.paragraphs", count=len(text_chunks))
+
             elif strategy == ChunkingStrategy.SPLIT_BY_ITEMS:
                 items = self._extract_list_items(section.content)
                 for item in items:
@@ -270,7 +283,83 @@ class HierarchicalChunker:
                 chunks.append(chunk)
                 seq += 1
 
+            if end_pos >= len(text):
+                break
             current_pos = end_pos - self.chunk_overlap
+
+        return chunks
+
+    MIN_PARAGRAPH_WORDS = 20
+
+    def _split_by_paragraphs(
+        self,
+        text: str,
+        context: HierarchicalContext,
+        doc_id: str,
+        doc_kind,
+        section_name: str,
+        start_sequence: int,
+    ) -> list[ContextualizedChunk]:
+        """Split text into chunks by paragraph per BR-EMBEDDING-001.
+
+        Rules:
+        1. Each paragraph (separated by blank lines) produces one chunk.
+        2. Paragraphs with < 20 words are merged with the next paragraph.
+        3. If a merged paragraph exceeds max_chunk_size, fall back to
+           size-based splitting for that paragraph.
+        """
+        raw_paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+
+        if not raw_paragraphs:
+            return []
+
+        # Merge short paragraphs (< 20 words) with the next one
+        merged: list[str] = []
+        buffer = ""
+        for para in raw_paragraphs:
+            if buffer:
+                buffer = f"{buffer}\n\n{para}"
+            else:
+                buffer = para
+
+            if len(buffer.split()) >= self.MIN_PARAGRAPH_WORDS:
+                merged.append(buffer)
+                buffer = ""
+
+        # Flush remaining buffer
+        if buffer:
+            if merged:
+                merged[-1] = f"{merged[-1]}\n\n{buffer}"
+            else:
+                merged.append(buffer)
+
+        # Create chunks, falling back to size-based splitting for large paragraphs
+        chunks: list[ContextualizedChunk] = []
+        seq = start_sequence
+        for para in merged:
+            if len(para) > self.max_chunk_size:
+                sub_chunks = self._chunk_text(
+                    text=para,
+                    context=context,
+                    doc_id=doc_id,
+                    doc_kind=doc_kind,
+                    section_name=section_name,
+                    start_sequence=seq,
+                )
+                chunks.extend(sub_chunks)
+                seq += len(sub_chunks)
+            else:
+                chunk = self._create_chunk(
+                    content=para,
+                    context=context,
+                    chunk_type="paragraph",
+                    doc_id=doc_id,
+                    doc_kind=doc_kind,
+                    section_name=section_name,
+                    sequence=seq,
+                )
+                chunks.append(chunk)
+                seq += 1
 
         return chunks
 

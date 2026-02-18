@@ -35,7 +35,7 @@ ENTITY_SCHEMA = TemplateSchema(
             aliases=["Description"],
             required=True,
             content_expectation=ContentExpectation.TEXT,
-            chunking_strategy=ChunkingStrategy.KEEP_INTACT,
+            chunking_strategy=ChunkingStrategy.SPLIT_BY_PARAGRAPHS,
             description="Entity description",
         ),
         SectionDefinition(
