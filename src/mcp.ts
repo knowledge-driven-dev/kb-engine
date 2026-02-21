@@ -3,7 +3,7 @@
  * MCP server — exposes KDD search tools.
  *
  * Tools: kdd_search, kdd_find_spec, kdd_related, kdd_impact,
- *        kdd_read_section, kdd_list, kdd_stats
+ *        kdd_context, kdd_read_section, kdd_list, kdd_stats
  */
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
@@ -17,6 +17,7 @@ import { createContainer, type Container } from "./container.ts";
 import { hybridSearch } from "./application/queries/hybrid-search.ts";
 import { graphQuery } from "./application/queries/graph-query.ts";
 import { impactQuery } from "./application/queries/impact-query.ts";
+import { contextQuery } from "./application/queries/context-query.ts";
 import type { KDDKind } from "./domain/types.ts";
 
 const INDEX_PATH = resolve(process.env.KDD_INDEX_PATH ?? ".kdd-index");
@@ -115,6 +116,23 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       name: "kdd_stats",
       description: "Get index statistics: node count, edge count, embedding count, etc.",
       inputSchema: { type: "object" as const, properties: {} },
+    },
+    {
+      name: "kdd_context",
+      description: "Context amplifier: get KDD constraints and behavior specs relevant to files or entities you're about to modify. Returns business rules, invariants, preconditions, and expected behavior. Call BEFORE making changes.",
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          hints: {
+            type: "array",
+            items: { type: "string" },
+            description: "File paths, entity names, or keywords (e.g. ['pedido.ts', 'checkout', 'Entity:User'])",
+          },
+          depth: { type: "number", description: "Graph traversal depth (default: 1)" },
+          max_tokens: { type: "number", description: "Token budget for output (default: 4000)" },
+        },
+        required: ["hints"],
+      },
     },
   ],
 }));
@@ -247,6 +265,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           title: n.indexed_fields.title ?? n.id,
         }));
         return { content: [{ type: "text", text: JSON.stringify(items, null, 2) }] };
+      }
+
+      case "kdd_context": {
+        const hints = (args?.hints as string[]) ?? [];
+        const result = contextQuery(
+          { hints, depth: Number(args?.depth ?? 1), maxTokens: Number(args?.max_tokens ?? 4000) },
+          c.graphStore,
+        );
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       }
 
       case "kdd_stats": {

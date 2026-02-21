@@ -2,7 +2,7 @@
 /**
  * kdd CLI — TypeScript/Bun implementation.
  *
- * Subcommands: index, search, graph, impact, semantic, coverage, violations
+ * Subcommands: index, search, graph, impact, semantic, coverage, violations, context
  */
 
 import { defineCommand, runMain } from "citty";
@@ -15,6 +15,7 @@ import { impactQuery } from "./application/queries/impact-query.ts";
 import { semanticQuery } from "./application/queries/semantic-query.ts";
 import { coverageQuery } from "./application/queries/coverage-query.ts";
 import { violationsQuery } from "./application/queries/violations-query.ts";
+import { contextQuery } from "./application/queries/context-query.ts";
 import { indexDocument } from "./application/commands/index-document.ts";
 import { createDefaultRegistry } from "./application/extractors/registry.ts";
 import { ArtifactWriter } from "./infra/artifact-writer.ts";
@@ -301,6 +302,55 @@ const violationsCmd = defineCommand({
   },
 });
 
+const contextCmd = defineCommand({
+  meta: { name: "context", description: "Context amplifier — get KDD constraints relevant to files/entities" },
+  args: {
+    hints: { type: "positional", description: "Hints: file paths, entity names, keywords, or node IDs", required: true },
+    "index-path": { type: "string", description: "Path to .kdd-index/", default: ".kdd-index" },
+    depth: { type: "string", description: "Graph traversal depth", default: "1" },
+    "max-tokens": { type: "string", description: "Token budget for output", default: "4000" },
+  },
+  async run({ args }) {
+    const indexPath = resolve(args["index-path"]);
+    const container = await createContainer(indexPath, { skipEmbeddings: true });
+
+    // citty gives us a single positional; remaining args come via process.argv
+    const hints = extractHints(args.hints);
+
+    const result = contextQuery(
+      {
+        hints,
+        depth: parseInt(args.depth, 10),
+        maxTokens: parseInt(args["max-tokens"], 10),
+      },
+      container.graphStore,
+    );
+
+    console.log(JSON.stringify(result, null, 2));
+  },
+});
+
+/** Extract hints: the first positional + any remaining non-flag args from argv. */
+function extractHints(firstHint: string): string[] {
+  const hints = [firstHint];
+  // citty only captures the first positional; grab extra positionals from argv
+  const argv = process.argv;
+  const contextIdx = argv.indexOf("context");
+  if (contextIdx >= 0) {
+    for (let i = contextIdx + 1; i < argv.length; i++) {
+      const arg = argv[i]!;
+      if (arg.startsWith("--")) {
+        i++; // skip flag value
+        continue;
+      }
+      if (arg !== firstHint) {
+        hints.push(arg);
+      }
+    }
+  }
+  return hints;
+}
+
 // ── Main ────────────────────────────────────────────────────────────
 
 const main = defineCommand({
@@ -313,6 +363,7 @@ const main = defineCommand({
     semantic: semanticCmd,
     coverage: coverageCmd,
     violations: violationsCmd,
+    context: contextCmd,
   },
 });
 
