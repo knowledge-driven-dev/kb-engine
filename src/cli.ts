@@ -15,6 +15,7 @@ import { impactQuery } from "./application/queries/impact-query.ts";
 import { semanticQuery } from "./application/queries/semantic-query.ts";
 import { coverageQuery } from "./application/queries/coverage-query.ts";
 import { violationsQuery } from "./application/queries/violations-query.ts";
+import { orphanEdgesQuery } from "./application/queries/orphan-edges-query.ts";
 import { contextQuery } from "./application/queries/context-query.ts";
 import { indexDocument } from "./application/commands/index-document.ts";
 import { createDefaultRegistry } from "./application/extractors/registry.ts";
@@ -302,6 +303,29 @@ const violationsCmd = defineCommand({
   },
 });
 
+const orphanEdgesCmd = defineCommand({
+  meta: { name: "orphan-edges", description: "Detect edges with missing source or target nodes" },
+  args: {
+    "index-path": { type: "string", description: "Path to .kdd-index/", default: ".kdd-index" },
+    "edge-type": { type: "string", description: "Filter by edge type (comma-separated)" },
+  },
+  async run({ args }) {
+    const indexPath = resolve(args["index-path"]);
+    const container = await createContainer(indexPath, { skipEmbeddings: true });
+
+    const includeEdgeTypes = args["edge-type"]
+      ? args["edge-type"].split(",")
+      : undefined;
+
+    const result = orphanEdgesQuery(
+      { includeEdgeTypes },
+      container.graphStore,
+    );
+
+    console.log(JSON.stringify(result, null, 2));
+  },
+});
+
 const contextCmd = defineCommand({
   meta: { name: "context", description: "Context amplifier — get KDD constraints relevant to files/entities" },
   args: {
@@ -363,6 +387,7 @@ const main = defineCommand({
     semantic: semanticCmd,
     coverage: coverageCmd,
     violations: violationsCmd,
+    "orphan-edges": orphanEdgesCmd,
     context: contextCmd,
   },
 });

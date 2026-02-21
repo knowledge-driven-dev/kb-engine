@@ -3,15 +3,17 @@
  */
 
 import Graph from "graphology";
-import type { GraphEdge, GraphNode } from "../domain/types.ts";
+import type { GraphEdge, GraphNode, OrphanEdge } from "../domain/types.ts";
 
 export class GraphStore {
   private graph = new Graph({ multi: true, type: "directed" });
   private nodes = new Map<string, GraphNode>();
+  private _orphanEdges: OrphanEdge[] = [];
 
   load(nodes: GraphNode[], edges: GraphEdge[]): void {
     this.graph.clear();
     this.nodes.clear();
+    this._orphanEdges = [];
 
     for (const node of nodes) {
       this.graph.addNode(node.id, { data: node });
@@ -19,8 +21,12 @@ export class GraphStore {
     }
 
     for (const edge of edges) {
-      if (!this.graph.hasNode(edge.from_node)) continue;
-      if (!this.graph.hasNode(edge.to_node)) continue;
+      const fromExists = this.graph.hasNode(edge.from_node);
+      const toExists = this.graph.hasNode(edge.to_node);
+      if (!fromExists || !toExists) {
+        this._orphanEdges.push(toOrphanEdge(edge, fromExists, toExists));
+        continue;
+      }
       const key = `${edge.from_node}→${edge.to_node}:${edge.edge_type}`;
       if (!this.graph.hasEdge(key)) {
         this.graph.addEdgeWithKey(key, edge.from_node, edge.to_node, { data: edge });
@@ -38,8 +44,12 @@ export class GraphStore {
   }
 
   addEdge(edge: GraphEdge): void {
-    if (!this.graph.hasNode(edge.from_node)) return;
-    if (!this.graph.hasNode(edge.to_node)) return;
+    const fromExists = this.graph.hasNode(edge.from_node);
+    const toExists = this.graph.hasNode(edge.to_node);
+    if (!fromExists || !toExists) {
+      this._orphanEdges.push(toOrphanEdge(edge, fromExists, toExists));
+      return;
+    }
     const key = `${edge.from_node}→${edge.to_node}:${edge.edge_type}`;
     if (!this.graph.hasEdge(key)) {
       this.graph.addEdgeWithKey(key, edge.from_node, edge.to_node, { data: edge });
@@ -190,6 +200,10 @@ export class GraphStore {
   findViolations(): GraphEdge[] {
     return this.allEdges().filter((e) => e.layer_violation);
   }
+
+  orphanEdges(): OrphanEdge[] {
+    return this._orphanEdges;
+  }
 }
 
 function edgeMatches(
@@ -200,6 +214,23 @@ function edgeMatches(
   if (respectLayers && edge.layer_violation) return false;
   if (edgeTypes != null && !edgeTypes.includes(edge.edge_type)) return false;
   return true;
+}
+
+function toOrphanEdge(edge: GraphEdge, fromExists: boolean, toExists: boolean): OrphanEdge {
+  const reason = !fromExists && !toExists
+    ? "both_missing"
+    : !fromExists
+      ? "missing_source"
+      : "missing_target";
+  return {
+    from_node: edge.from_node,
+    to_node: edge.to_node,
+    edge_type: edge.edge_type,
+    source_file: edge.source_file,
+    from_exists: fromExists,
+    to_exists: toExists,
+    reason,
+  };
 }
 
 function nodeMatchesText(

@@ -210,3 +210,13 @@ export interface CoverageCategory {
   status: "covered" | "missing" | "partial";
   found: string[];
 }
+
+export interface OrphanEdge {
+  from_node: string;
+  to_node: string;
+  edge_type: string;
+  source_file: string;
+  from_exists: boolean;
+  to_exists: boolean;
+  reason: "missing_source" | "missing_target" | "both_missing";
+}
